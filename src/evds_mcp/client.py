@@ -1,8 +1,11 @@
 """EVDS web servisi istemcisi.
 
-Tek endpoint, header'da anahtar, birkaç parametre. Bu yüzden hazır paket
-kullanmak yerine kendimiz yazdık -- hata mesajları üzerinde kontrol
+Hazır paket yerine kendimiz yazdık; hata mesajları üzerinde kontrol
 istiyoruz, çünkü bu mesajları sonunda bir dil modeli okuyacak.
+
+Servisin iki tuhaflığı var, ikisi de aşağıda ele alınıyor: parametreler
+soru işareti olmadan doğrudan yola ekleniyor, ve dönen sütun adlarında
+nokta yerine alt çizgi oluyor.
 """
 
 from __future__ import annotations
@@ -13,10 +16,11 @@ from datetime import date
 
 import httpx
 
-TABAN = "https://evds2.tcmb.gov.tr/service/evds/"
+# evds2 2026'da evds3'e taşındı ve servis yolu da değişti. Eski
+# dokümanlardaki evds2.tcmb.gov.tr/service/evds/ artık arayüze yönlendiriyor.
+TABAN = "https://evds3.tcmb.gov.tr/igmevdsms-dis/"
 
-# EVDS frekans kodları. Sadece 5'i canlı doğruladım, gerisi dokümandan --
-# bkz. SONRA.md
+# Sadece 5 (aylık) canlı doğrulandı, gerisi dokümandan -- bkz. SONRA.md
 FREKANS = {
     "günlük": 1,
     "işgünü": 2,
@@ -54,13 +58,22 @@ class Seri:
 
 
 def _tarih_yaz(t: date) -> str:
-    # EVDS GG-AA-YYYY istiyor. ISO değil; karıştırılırsa sessizce
-    # yanlış aralık gelir, hata dönmez.
+    # GG-AA-YYYY. ISO değil; karıştırılırsa API hata vermiyor,
+    # sessizce başka aralık dönüyor.
     return t.strftime("%d-%m-%Y")
 
 
+def _parametre_yaz(**kwargs) -> str:
+    # EVDS parametreleri soru işareti olmadan yola ekliyor:
+    #   .../igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2020&type=json
+    # httpx'in params= parametresi başa "?" koyduğu için elle kuruyoruz.
+    # Boş string'i atmıyoruz: datagroups ucu "code=" parametresini
+    # boş da olsa görmek istiyor.
+    return "&".join(f"{k}={v}" for k, v in kwargs.items() if v is not None)
+
+
 def _sutun_bul(satir: dict, kod: str) -> str | None:
-    # İstediğin kod TP.FG.J0, dönen sütun TP_FG_J0 olabiliyor.
+    # TP.FG.J0 istiyorsun, TP_FG_J0 geliyor.
     for aday in (kod, kod.replace(".", "_")):
         if aday in satir:
             return aday
@@ -68,7 +81,8 @@ def _sutun_bul(satir: dict, kod: str) -> str | None:
 
 
 def _sayiya_cevir(ham) -> float | None:
-    # Eksik gözlemler boş string ya da None olarak geliyor.
+    # Eksik gözlemler boş string ya da None. Dolu olanlar "446.45000000"
+    # gibi string geliyor.
     if ham is None or ham == "":
         return None
     try:
@@ -78,16 +92,16 @@ def _sayiya_cevir(ham) -> float | None:
 
 
 class EVDS:
-    def __init__(self, anahtar: str | None = None, zaman_asimi: float = 20.0):
+    def __init__(self, anahtar: str | None = None, zaman_asimi: float = 30.0):
         self.anahtar = anahtar or os.environ.get("EVDS_API_KEY", "")
         if not self.anahtar:
             raise AnahtarYok(
-                "EVDS API anahtarı yok. evds2.tcmb.gov.tr adresinden ücretsiz "
+                "EVDS API anahtarı yok. evds3.tcmb.gov.tr adresinden ücretsiz "
                 "alıp EVDS_API_KEY ortam değişkenine koy."
             )
         self._http = httpx.Client(
             base_url=TABAN,
-            headers={"key": self.anahtar},  # 2024'ten beri URL'de değil, header'da
+            headers={"key": self.anahtar},  # 2024'ten beri URL'de değil
             timeout=zaman_asimi,
         )
 
@@ -100,6 +114,18 @@ class EVDS:
     def __exit__(self, *_) -> None:
         self.close()
 
+    def _al(self, yol: str):
+        yanit = self._http.get(yol)
+        if yanit.status_code == 401:
+            raise AnahtarYok("EVDS anahtarı reddedildi. Anahtarı kontrol et.")
+        yanit.raise_for_status()
+        if "json" not in yanit.headers.get("content-type", ""):
+            # Yol yanlışsa servis JSON yerine arayüzün HTML'ini döndürüyor.
+            raise EVDSHatasi(
+                f"JSON beklenirken HTML geldi ({yol!r}). Servis yolu değişmiş olabilir."
+            )
+        return yanit.json()
+
     def veri(
         self,
         kodlar: list[str],
@@ -110,30 +136,30 @@ class EVDS:
         if not kodlar:
             raise EVDSHatasi("En az bir seri kodu gerekli.")
         if baslangic > bitis:
-            raise EVDSHatasi(
-                f"Başlangıç bitişten sonra: {baslangic} > {bitis}"
-            )
+            raise EVDSHatasi(f"Başlangıç bitişten sonra: {baslangic} > {bitis}")
         if frekans not in FREKANS:
             raise EVDSHatasi(
-                f"Bilinmeyen frekans {frekans!r}. "
-                f"Seçenekler: {', '.join(FREKANS)}"
+                f"Bilinmeyen frekans {frekans!r}. Seçenekler: {', '.join(FREKANS)}"
             )
 
-        yanit = self._http.get(
-            "",
-            params={
-                "series": "-".join(kodlar),
-                "startDate": _tarih_yaz(baslangic),
-                "endDate": _tarih_yaz(bitis),
-                "frequency": FREKANS[frekans],
-                "type": "json",
-            },
+        govde = self._al(
+            _parametre_yaz(
+                series="-".join(kodlar),
+                startDate=_tarih_yaz(baslangic),
+                endDate=_tarih_yaz(bitis),
+                frequency=FREKANS[frekans],
+                type="json",
+            )
         )
-        if yanit.status_code == 401:
-            raise AnahtarYok("EVDS anahtarı reddedildi. Anahtarı kontrol et.")
-        yanit.raise_for_status()
+        return self._ayikla(govde, kodlar)
 
-        return self._ayikla(yanit.json(), kodlar)
+    def veri_gruplari(self) -> list[dict]:
+        """Tüm veri gruplarının künyesi. Katalogun üst seviyesi."""
+        return self._al("datagroups/" + _parametre_yaz(mode=0, code="", type="json"))
+
+    def grup_serileri(self, grup_kodu: str) -> list[dict]:
+        """Bir veri grubundaki serilerin künyesi."""
+        return self._al("serieList/" + _parametre_yaz(type="json", code=grup_kodu))
 
     @staticmethod
     def _ayikla(govde: dict, kodlar: list[str]) -> list[Seri]:
@@ -149,8 +175,8 @@ class EVDS:
         for kod in kodlar:
             sutun = _sutun_bul(ornek, kod)
             if sutun is None:
-                # Diğer seriler geldiyse onları döndürmek, hepsini
-                # birden patlatmaktan iyi.
+                # Bir kod yanlışsa tüm çağrıyı patlatmak yerine o seriyi
+                # boş bırak; diğerleri işe yarayabilir.
                 seriler.append(Seri(kod=kod, gozlemler=[]))
                 continue
             seriler.append(

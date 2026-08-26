@@ -19,7 +19,10 @@ buraya yazıp geçiyorum, yoksa hiç bitmeyecek.
 ## Doğrulama
 - Frekans kodlarının tamamını API'ye karşı doğrula. Şu an sadece
   5 = aylık'tan eminim, gerisi dokümandan.
-- Revizyon tarihi alanı geliyor mu, geliyorsa künyeye ekle.
+- serieList künyesinde METADATA_LINK ve REV_POL_LINK alanları var,
+  çoğu null geliyor. Dolu olanları künyeye ekle.
+- datagroups mode=1 ve mode=2 ne işe yarıyor? mode=2&code=10 boş döndü,
+  mode=0 tamamını veriyor. Kategoriye göre filtreleme başka türlü olmalı.
 
 ## Aşama 2 (asıl iş)
 - Durağanlık testi zorunluluğu

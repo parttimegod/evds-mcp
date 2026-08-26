@@ -18,14 +18,13 @@ diyorsun, gidip getiriyor.
 
 ## Durum
 
-Erken. Şu an elde olan:
+Erken. Şu an çalışan:
 
-- EVDS istemcisi (`client.py`) — seri çekme, eksik gözlem ve
-  tip dönüşümü dahil
-- Türkçe metin normalizasyonu (`text.py`)
+- EVDS istemcisi — seri verisi, veri grubu listesi, gruptaki seriler
+- Türkçe metin normalizasyonu
 
-Henüz olmayan: MCP katmanının kendisi, seri kataloğu ve arama. Sıradaki
-iş onlar. Ertelediğim her şey `SONRA.md` içinde.
+Henüz olmayan: MCP katmanının kendisi ve seri araması. Sıradaki iş onlar.
+Ertelediğim her şey `SONRA.md` içinde.
 
 ## Kurulum
 
@@ -35,8 +34,8 @@ cd evds-mcp
 uv sync
 ```
 
-API anahtarını [evds2.tcmb.gov.tr](https://evds2.tcmb.gov.tr) adresinden
-ücretsiz alıyorsun:
+API anahtarını [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr) adresinden
+ücretsiz alıyorsun — profil sayfasının altındaki "API Anahtarı Kopyala".
 
 ```
 export EVDS_API_KEY=...
@@ -49,44 +48,78 @@ from datetime import date
 from evds_mcp.client import EVDS
 
 with EVDS() as evds:
-    seriler = evds.veri(
-        ["TP.FG.J0"],
-        baslangic=date(2020, 1, 1),
-        bitis=date(2026, 8, 1),
-        frekans="aylık",
+    tufe, faiz = evds.veri(
+        ["TP.FG.J0", "TP.APIFON4"],
+        baslangic=date(2024, 1, 1),
+        bitis=date(2024, 6, 1),
     )
 
-for g in seriler[0].gozlemler[:5]:
-    print(g.tarih, g.deger)
+for a, b in zip(tufe.gozlemler, faiz.gozlemler):
+    print(a.tarih, a.deger, b.deger)
+```
+
+```
+2024-1 1984.02 44.0
+2024-2 2073.88 45.0
+2024-3 2139.47 51.22
+...
+```
+
+Katalog tarafı:
+
+```python
+evds.veri_gruplari()          # 676 veri grubu
+evds.grup_serileri("bie_tufe1")   # gruptaki 38 serinin künyesi
 ```
 
 ## Notlar
 
-Uğraştıran birkaç şey, aynı yola girecekler için:
+Uğraştıran şeyler. Aynı yola girecekler buradan zaman kazansın.
 
-**Türkçe küçük harf.** `"FAİZ".lower()` beklediğin şeyi vermiyor —
-`"I".lower()` size `"i"` döndürüyor, `"ı"` değil. Aramada bunu
-kullanırsanız hata almıyorsunuz, sadece sonuç gelmiyor. `text.py`
-bunun için var.
+**Servis evds3'e taşınmış.** İnternetteki örneklerin neredeyse tamamı
+hâlâ `evds2.tcmb.gov.tr/service/evds/` gösteriyor. O adres artık web
+arayüzüne yönlendiriyor ve elinize JSON yerine HTML geçiyor. Doğrusu:
 
-**Tarih formatı `GG-AA-YYYY`.** ISO değil. Karıştırırsanız API hata
-vermiyor, sessizce başka bir aralık dönüyor.
+```
+https://evds3.tcmb.gov.tr/igmevdsms-dis/
+```
+
+**Parametreler soru işareti olmadan yola ekleniyor.** Normal query string
+değil:
+
+```
+.../igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2020&type=json
+```
+
+`requests` ya da `httpx`'in `params=` parametresini kullanırsanız başa `?`
+koyuyor ve servis anlamıyor. URL'yi elle kurmak gerekiyor.
 
 **Sütun adlarında nokta yerine alt çizgi.** `TP.FG.J0` istiyorsunuz,
-yanıtta `TP_FG_J0` geliyor. İkisini de arıyoruz.
+yanıtta `TP_FG_J0` geliyor. İkisine de bakıyoruz.
 
-**Anahtar 2024'ten beri header'da**, URL parametresinde değil. Eski
-örnekler hâlâ URL'de gösteriyor.
+**Tarih formatı `GG-AA-YYYY`.** ISO değil. Karıştırırsanız API hata
+vermiyor, sessizce başka bir aralık dönüyor — en sinsi olanı bu.
+
+**Anahtar 2024'ten beri header'da**, URL parametresinde değil.
+
+**Türkçe küçük harf.** `"FAİZ".lower()` beklediğinizi vermiyor;
+`"I".lower()` size `"i"` döndürüyor, `"ı"` değil. Aramada bunu
+kullanırsanız hata almıyorsunuz, sadece sonuç gelmiyor. `text.py` bunun
+için var.
+
+Bir de yanlış alarm: yanıtlardaki Türkçe karakterler bozuk *görünüyor*
+ama değil. Üç uçta da geçerli UTF-8 geliyor; bozan şey Windows
+konsolunun kod sayfası.
 
 ## Testler
 
 ```
-uv run pytest
+uv run pytest          # cevrimdisi, fixture'lara karsi
+uv run pytest -m live  # gercek API, EVDS_API_KEY gerekiyor
 ```
 
-Testler ağa çıkmıyor, `tests/fixtures/` altındaki kayıtlı yanıtlara
-karşı çalışıyor. Fixture şu an elle yazıldı; gerçek bir yanıtla
-değiştirilecek.
+`tests/fixtures/` altındakiler gerçek EVDS yanıtları, bir kez kaydedildi.
+Servis şekil değiştirirse önce bu testler kırılır.
 
 ## Lisans
 

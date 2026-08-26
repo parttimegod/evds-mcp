@@ -1,0 +1,53 @@
+{
+  "totalCount": 6,
+  "items": [
+    {
+      "Tarih": "2020-1",
+      "TP_FG_J0": "446.45000000",
+      "TP_APIFON4": "10.97000000",
+      "UNIXTIME": {
+        "$numberLong": "1577833200"
+      }
+    },
+    {
+      "Tarih": "2020-2",
+      "TP_FG_J0": "448.02000000",
+      "TP_APIFON4": "10.54000000",
+      "UNIXTIME": {
+        "$numberLong": "1580511600"
+      }
+    },
+    {
+      "Tarih": "2020-3",
+      "TP_FG_J0": "450.58000000",
+      "TP_APIFON4": "9.27000000",
+      "UNIXTIME": {
+        "$numberLong": "1583017200"
+      }
+    },
+    {
+      "Tarih": "2020-4",
+      "TP_FG_J0": "454.43000000",
+      "TP_APIFON4": "8.35000000",
+      "UNIXTIME": {
+        "$numberLong": "1585692000"
+      }
+    },
+    {
+      "Tarih": "2020-5",
+      "TP_FG_J0": "460.62000000",
+      "TP_APIFON4": "7.90000000",
+      "UNIXTIME": {
+        "$numberLong": "1588284000"
+      }
+    },
+    {
+      "Tarih": "2020-6",
+      "TP_FG_J0": "465.84000000",
+      "TP_APIFON4": "7.62000000",
+      "UNIXTIME": {
+        "$numberLong": "1590962400"
+      }
+    }
+  ]
+}
