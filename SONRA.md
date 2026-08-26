@@ -4,8 +4,13 @@ Aklıma gelen ama şimdi yapmayacağım şeyler. İlk sürüm çıkana kadar
 buraya yazıp geçiyorum, yoksa hiç bitmeyecek.
 
 ## Arama
-- Şu an düz keyword eşleşmesi. Anlamsal aramaya geçilebilir —
+- Şu an puanlı keyword eşleşmesi. Anlamsal aramaya geçilebilir —
   yerel embedding modeli var, katalog zaten küçük.
+- Sıralama ince ayarı: "enflasyon" sorgusunda İstanbul TÜFE'si ulusal
+  TÜFE'nin önüne geçiyor, çünkü eşit puanda kısa adı seçiyoruz. Ad
+  uzunluğu zayıf bir ölçüt.
+- Arşiv tespitini ada bakarak yapıyoruz ("(Arşiv)" geçiyor mu). END_DATE
+  eski mi diye bakmak çok daha sağlam olur -- alan zaten künyede.
 - Eşanlamlı sözlüğü: "enflasyon" -> TÜFE, ÜFE. "faiz" -> politika faizi,
   gecelik, ağırlıklı ortalama fonlama.
 - Kısaltmalar: TÜFE/tufe/CPI hepsi aynı yere gitmeli.

@@ -21,10 +21,11 @@ diyorsun, gidip getiriyor.
 Erken. Şu an çalışan:
 
 - EVDS istemcisi — seri verisi, veri grubu listesi, gruptaki seriler
+- Katalog ve arama — 676 veri grubu içinde puanlı arama, grup içinde seri arama
 - Türkçe metin normalizasyonu
 
-Henüz olmayan: MCP katmanının kendisi ve seri araması. Sıradaki iş onlar.
-Ertelediğim her şey `SONRA.md` içinde.
+Henüz olmayan: MCP katmanının kendisi. Sıradaki iş o. Ertelediğim her şey
+`SONRA.md` içinde.
 
 ## Kurulum
 
@@ -65,12 +66,25 @@ for a, b in zip(tufe.gozlemler, faiz.gozlemler):
 ...
 ```
 
-Katalog tarafı:
+Aramayla birlikte tam döngü:
 
 ```python
-evds.veri_gruplari()          # 676 veri grubu
-evds.grup_serileri("bie_tufe1")   # gruptaki 38 serinin künyesi
+from evds_mcp.catalog import Katalog
+
+with EVDS() as evds:
+    k = Katalog(evds)
+
+    gruplar = k.grup_ara("enflasyon")
+    # bie_tukfiy2025  Tüketici Fiyat Endeksi (2025=100)  [AYLIK]
+
+    seriler = k.seri_ara("genel", "bie_tukfiy2025")
+    # TP.TUKFIY2025.GENEL  Genel Endeks  01-01-2005 - 01-07-2026
+
+    evds.veri(["TP.TUKFIY2025.GENEL"], date(2025, 1, 1), date(2025, 5, 1))
 ```
+
+Künyede kapsam tarihleri de var, çünkü EVDS'de bir sürü arşivlenmiş seri
+duruyor; hangisinin hâlâ yayınlandığını veriyi çekmeden görmek gerekiyor.
 
 ## Notlar
 
