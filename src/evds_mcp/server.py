@@ -16,6 +16,7 @@ from datetime import date, datetime
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
+from .analysis import AnalizHatasi, duraganlik, iliski
 from .catalog import Katalog
 from .client import EVDS, FREKANS, EVDSHatasi
 
@@ -31,6 +32,10 @@ mcp = FastMCP(
         "Sıra şöyle: seri kodları anlaşılmaz olduğu için (TP.FG.J0 gibi) "
         "önce search_series ile aradığın kavramı ara, dönen koddan birini "
         "seç, sonra summarize_series ile bak ya da get_series ile veriyi al.\n\n"
+        "İki seriyi karşılaştırırken get_series'ten gelen sayılarla kendi "
+        "korelasyonunu hesaplama. Makroekonomik seriler genelde durağan "
+        "değildir ve seviye korelasyonu sahte çıkar. Bunun için "
+        "analyze_relationship var; durağanlık testini kendisi yapıyor.\n\n"
         "Kod uydurma. Emin değilsen search_series çağır."
     ),
 )
@@ -249,6 +254,115 @@ def get_series(
             f"Son {PENCERE} gözlem gösteriliyor; özetler serinin tamamını "
             "kapsıyor. Hepsi için full=True ver."
         )
+    return sonuc
+
+
+@mcp.tool
+def test_stationarity(
+    code: str,
+    start: str,
+    end: str,
+    frequency: str = "aylık",
+) -> dict:
+    """Bir seriyi durağanlaştıran en düşük dereceli dönüşümü bulur.
+
+    ADF testini seviyede, log farkında ve ardışık farklarda çalıştırır;
+    serinin I(d) derecesini ve önerilen dönüşümü döndürür.
+
+    Fark derecesini varsayma. "Fiyat endeksinde log farkı al" gibi genel
+    kurallar Türkiye verisinde tutmayabiliyor -- TÜFE 2010-2026 aralığında
+    I(2), yani log farkı bile durağan değil.
+
+    Modelleme, regresyon ya da karşılaştırma yapmadan önce bunu çağır.
+
+    Args:
+        code: Seri kodu.
+        start: Başlangıç, YYYY-AA-GG.
+        end: Bitiş, YYYY-AA-GG.
+        frequency: günlük, işgünü, haftalık, ayda2, aylık, çeyreklik,
+            6aylık, yıllık.
+    """
+    evds, _ = _baglan()
+    b, s = _tarih_oku(start, "start"), _tarih_oku(end, "end")
+    try:
+        (seri,) = evds.veri([code], b, s, frekans=_frekans_dogrula(frequency))
+        degerler = [g.deger for g in seri.gozlemler if g.deger is not None]
+        d = duraganlik(degerler)
+    except (EVDSHatasi, AnalizHatasi) as e:
+        raise ToolError(str(e)) from e
+
+    return {
+        "kod": code,
+        "gozlem": len(degerler),
+        "butunlesme_derecesi": d.derece,
+        "onerilen_donusum": d.donusum,
+        "adf_p_degerleri": {k: round(v, 4) for k, v in d.p_degerleri.items()},
+        "notlar": d.notlar,
+        "yorum": (
+            "ADF'de H0 birim kök vardır. p < 0.05 ise durağan. "
+            "butunlesme_derecesi kaç kez fark alınması gerektiğidir."
+        ),
+    }
+
+
+@mcp.tool
+def analyze_relationship(
+    codes: list[str],
+    start: str,
+    end: str,
+    frequency: str = "aylık",
+) -> dict:
+    """İki seri arasındaki ilişkiyi metodolojik kontrollerden geçirip verir.
+
+    İki seriyi karşılaştırmak istediğinde bunu kullan. get_series'ten
+    gelen ham sayılarla kendin korelasyon hesaplama: makro seriler
+    genelde durağan değildir ve seviye korelasyonu ortak trend yüzünden
+    şişkin çıkar. Somut örnek: TÜFE ile politika faizi seviyelerinde
+    korelasyon 0.86, fark alındıktan sonra 0.16.
+
+    Bu araç önce her seriyi durağanlık testinden geçirir, gereken
+    dönüşümü uygular, hangi dönüşümü uyguladığını söyler ve sonucu
+    ondan sonra verir. İkisi de I(1) ise eşbütünleşmeyi de test eder.
+
+    Args:
+        codes: Tam olarak iki seri kodu.
+        start: Başlangıç, YYYY-AA-GG.
+        end: Bitiş, YYYY-AA-GG.
+        frequency: günlük, işgünü, haftalık, ayda2, aylık, çeyreklik,
+            6aylık, yıllık.
+    """
+    evds, _ = _baglan()
+    if len(codes) != 2:
+        raise ToolError(
+            f"analyze_relationship tam olarak iki kod istiyor, {len(codes)} geldi."
+        )
+
+    b, s = _tarih_oku(start, "start"), _tarih_oku(end, "end")
+    try:
+        seriler = evds.veri(codes, b, s, frekans=_frekans_dogrula(frequency))
+    except EVDSHatasi as e:
+        raise ToolError(str(e)) from e
+
+    # Aynı tarih ızgarasında ikisinin de dolu olduğu gözlemler.
+    ikinci = {g.tarih: g.deger for g in seriler[1].gozlemler}
+    cift = [
+        (g.deger, ikinci[g.tarih])
+        for g in seriler[0].gozlemler
+        if g.deger is not None and ikinci.get(g.tarih) is not None
+    ]
+    if not cift:
+        raise ToolError(
+            f"{codes[0]} ve {codes[1]} için ortak tarihli dolu gözlem yok. "
+            "Frekansları farklı olabilir; kapsamları search_series ile kontrol et."
+        )
+
+    try:
+        sonuc = iliski([a for a, _ in cift], [b_ for _, b_ in cift], codes[0], codes[1])
+    except AnalizHatasi as e:
+        raise ToolError(str(e)) from e
+
+    sonuc["kodlar"] = codes
+    sonuc["frekans"] = frequency
     return sonuc
 
 

@@ -71,10 +71,36 @@ tutmuyor, testi fiilen çalıştırmak gerekiyor.
 5. **Nokta tahmini değil aralık.** Tahmin döndüren her araç güven
    aralığı vermeli.
 
-## Sıradaki iş
+## Yapıldı
 
-Bu kuralları öneri olarak değil, araç seviyesinde **zorunluluk** olarak
-kodlamak. Model durağanlık testinden geçmeden regresyon aracını
-çağıramamalı.
+`analysis.py` ve iki yeni araç: `test_stationarity`, `analyze_relationship`.
+
+Zorlama şöyle işliyor: **seviye korelasyonu hesaplayan bir araç yok.**
+İki seriyi karşılaştırmanın tek yolu `analyze_relationship` ve o kendi
+içinde durağanlık testini yapıyor. Model yanlış rakama ulaşamıyor, çünkü
+o rakamı üreten bir yol açılmamış.
+
+Aynı soruyu şimdi sorunca dönen cevap:
+
+```
+donusum            d2
+korelasyon         0.0348
+ham_seviye_kor.    0.8628  + "bu rakamı kullanma, sahte regresyon"
+duraganlik         TÜFE I(2), FAİZ I(1)
+uyarı              dereceler farklı, düşük dereceli seri aşırı farklanmış olabilir
+yorum              korelasyondur, nedensellik değildir
+```
+
+Beş kuralın karşılıkları:
+
+1. ADF testi araca gömülü, atlanamıyor
+2. Fark derecesi ölçülüyor; I(2) çıkınca ayrıca uyarı veriliyor
+3. `donusum` alanı her çıktıda var
+4. `yorum` alanında nedensellik uyarısı sabit
+5. Tahmin aracı henüz yok; eklendiğinde aralık zorunlu olacak (SONRA.md)
+
+Ek olarak: iki seri de I(1) ise Engle-Granger eşbütünleşme testi
+çalışıyor. Eşbütünleşme varsa sadece farklarla çalışmak uzun dönem
+bilgisini atar, çıktı bunu söylüyor.
 
 Deney betiği repoda yok, tek seferlikti; sayılar yukarıda.

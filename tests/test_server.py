@@ -161,3 +161,74 @@ def test_frekans_istemciye_geciyor(sahte):
         codes=["TP.X"], start="2020-01-01", end="2020-06-01", frequency="yıllık"
     )
     assert sahte.son_cagri[3] == "yıllık"
+
+
+class YuruyusEVDS(SahteEVDS):
+    """ADF anlamlı çalışsın diye rassal yürüyüş döndüren sahte istemci."""
+
+    def veri(self, kodlar, baslangic, bitis, frekans="aylık"):
+        import random
+
+        self.son_cagri = (kodlar, baslangic, bitis, frekans)
+        seriler = []
+        for tohum, k in enumerate(kodlar):
+            r = random.Random(tohum)
+            v, g = 100.0, []
+            for i in range(200):
+                v += r.gauss(0, 1)
+                g.append(Gozlem(tarih=f"2010-{i + 1}", deger=v))
+            seriler.append(Seri(kod=k, gozlemler=g))
+        return seriler
+
+
+@pytest.fixture
+def yuruyus(monkeypatch):
+    e = YuruyusEVDS()
+    monkeypatch.setattr(server, "_evds", e)
+    monkeypatch.setattr(server, "_katalog", Katalog(e))
+    return e
+
+
+def test_stationarity_derece_ve_donusum_veriyor(yuruyus):
+    d = server.test_stationarity(code="TP.X", start="2010-01-01", end="2026-06-01")
+
+    assert d["butunlesme_derecesi"] == 1
+    assert d["onerilen_donusum"] in {"d1", "logd1"}
+    assert "seviye" in d["adf_p_degerleri"]
+
+
+def test_analyze_iki_koddan_fazlasini_reddediyor(yuruyus):
+    with pytest.raises(ToolError, match="iki kod"):
+        server.analyze_relationship(
+            codes=["A", "B", "C"], start="2010-01-01", end="2026-06-01"
+        )
+
+
+def test_analyze_tek_kodu_reddediyor(yuruyus):
+    with pytest.raises(ToolError, match="iki kod"):
+        server.analyze_relationship(codes=["A"], start="2010-01-01", end="2026-06-01")
+
+
+def test_analyze_ham_korelasyonu_uyariyla_veriyor(yuruyus):
+    d = server.analyze_relationship(
+        codes=["TP.A", "TP.B"], start="2010-01-01", end="2026-06-01"
+    )
+
+    assert "kullanma" in d["ham_seviye_korelasyonu"]["uyari"].lower()
+    assert "nedensellik" in d["yorum"].lower()
+    assert d["donusum"] != "seviye"
+
+
+def test_ham_korelasyon_araci_yok():
+    """Zorlama buradan geliyor: seviye korelasyonu hesaplayan araç yok.
+
+    analyze_relationship her zaman durağanlık testinden geçiriyor.
+    Yeni bir araç eklenirken bu test bilinçli olarak gözden geçirilsin.
+    """
+    adlar = {"search_series", "summarize_series", "get_series",
+             "test_stationarity", "analyze_relationship"}
+    import evds_mcp.server as s
+
+    tanimli = {a for a in dir(s) if not a.startswith("_") and callable(getattr(s, a))}
+    assert adlar <= tanimli
+    assert "correlate" not in tanimli

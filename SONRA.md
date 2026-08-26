@@ -29,11 +29,15 @@ buraya yazıp geçiyorum, yoksa hiç bitmeyecek.
 - datagroups mode=1 ve mode=2 ne işe yarıyor? mode=2&code=10 boş döndü,
   mode=0 tamamını veriyor. Kategoriye göre filtreleme başka türlü olmalı.
 
-## Aşama 2 (asıl iş)
-- Durağanlık testi zorunluluğu
-- Sahte regresyon uyarısı
-- Artık teşhisleri
-- Güven aralığı olmadan tahmin döndürme
+## Aşama 2
+Durağanlık zorunluluğu ve sahte regresyon uyarısı yapıldı (ASAMA2.md).
+Kalanlar:
+- Tahmin aracı. Eklenirse güven aralığı zorunlu olmalı, nokta tahmini
+  dönmemeli.
+- Artık teşhisleri: regresyon aracı eklenirse Durbin-Watson, Breusch-Godfrey.
+- Yapısal kırılma testi. ADF kırılmayı birim kök sanıyor; şu an
+  "durağanlaşmadı" deyip geçiyoruz, Zivot-Andrews daha doğru olur.
+- Mevsimsellik. Aylık serilerde mevsimsel birim kök (HEGY) bakılmıyor.
 
 ## Ambalaj
 - PyPI'ya yükleme

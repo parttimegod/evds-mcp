@@ -18,11 +18,10 @@ diyorsun, gidip getiriyor.
 
 ## Durum
 
-Çalışıyor ama erken. Üç araç var, MCP üzerinden bağlanıyor.
+Çalışıyor. Beş araç var: üçü veri, ikisi metodoloji.
 
-Henüz yok: kalıcı önbellek, TÜİK, anlamsal arama. Bir de asıl hedef olan
-metodoloji katmanı — modele ekonometrik iş akışını dayatan kısım. Onlar ve
-ertelediğim diğer her şey `SONRA.md` içinde.
+Henüz yok: kalıcı önbellek, TÜİK, anlamsal arama, tahmin araçları.
+Ertelediğim her şey `SONRA.md` içinde.
 
 ## Kurulum
 
@@ -68,6 +67,32 @@ Varsayılan olarak özet ve son 24 gözlem döner. Bu bir kısıtlama değil
 tasarım: 2003'ten beri aylık bir seri 280 gözlem eder, üç seri istendiğinde
 bağlam sayıyla dolar ve model düzgün düşünemez. Tamamı gerekiyorsa
 `full=True`.
+
+**`test_stationarity`** — Seriyi durağanlaştıran en düşük dereceli
+dönüşümü bulur. ADF'yi seviyede, log farkında ve ardışık farklarda
+çalıştırır, I(d) derecesini söyler.
+
+**`analyze_relationship`** — İki seri arasındaki ilişkiyi verir, ama
+önce her ikisini durağanlık testinden geçirip gereken dönüşümü uygular
+ve hangi dönüşümü uyguladığını yazar. İkisi de I(1) ise eşbütünleşmeyi
+de test eder.
+
+### Neden ham korelasyon aracı yok
+
+Bu bir eksiklik değil, tasarımın kendisi. Ölçtüm: TÜFE ile politika faizi
+**seviyelerinde korelasyon 0.86**. Bir model buradan "güçlü ilişki" der.
+Ama iki seri de durağan değil — bu sahte regresyonun ders kitabı örneği.
+Durağanlaştırıldıktan sonra korelasyon **0.03**.
+
+Model bu farkı kendiliğinden görmüyor. O yüzden yanlış rakama giden yol
+hiç açılmıyor: seviye korelasyonu hesaplayan bir araç sunmuyorum.
+`analyze_relationship` ham rakamı yine de gösteriyor, ama "bunu kullanma"
+etiketiyle ve nedeniyle birlikte.
+
+Bir de Türkiye'ye özel olan kısım: TÜFE bu dönemde **I(2)**. Yani bir fark
+yetmiyor, log farkı da yetmiyor. Modelin ezberindeki "fiyat endeksinde log
+farkı al" kuralı burada yanlış cevap üretiyor. Ölçümlerin tamamı
+`ASAMA2.md` içinde.
 
 ## Python'dan
 
