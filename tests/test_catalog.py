@@ -160,3 +160,31 @@ def test_kunye_kapsam_tarihlerini_tasiyor():
 
     assert kunye.baslangic == "01-01-2003"
     assert kunye.bitis == "01-12-2013"
+
+
+def test_seri_aramasi_elemiyor_siraliyor():
+    # Grup adı eşleşse de seri adları sorgu kelimesini içermiyor olabilir.
+    # Bu durumda boş dönmek yerine EVDS'nin ekran sırasına düşmeli.
+    k = Katalog(SahteEVDS())
+    sonuc = k.seri_ara("enflasyon", "bie_tufe1", limit=5)
+
+    assert sonuc, "grup eşleştiyse seri listesi boş dönmemeli"
+
+
+def test_turkiye_tespiti():
+    from evds_mcp.catalog import _turkiye_mi
+
+    tr = _seri_yap({"SERIE_CODE": "TP.BISPOLFAIZ.TUR", "SERIE_NAME": "Türkiye (TUR)"})
+    de = _seri_yap({"SERIE_CODE": "TP.BISPOLFAIZ.DEU", "SERIE_NAME": "Almanya (DEU)"})
+
+    assert _turkiye_mi(tr)
+    assert not _turkiye_mi(de)
+
+
+def test_ekran_sirasi_okunuyor():
+    kunye = _seri_yap({"SERIE_CODE": "TP.X", "SCREEN_ORDER": 470})
+    assert kunye.sira == 470
+
+
+def test_ekran_sirasi_yoksa_sona():
+    assert _seri_yap({"SERIE_CODE": "TP.X"}).sira == 9999

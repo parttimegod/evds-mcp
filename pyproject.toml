@@ -5,8 +5,12 @@ description = "TCMB EVDS verisi icin MCP sunucusu"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastmcp>=3.4.7",
     "httpx>=0.28.1",
 ]
+
+[project.scripts]
+evds-mcp = "evds_mcp.server:main"
 
 [build-system]
 requires = ["uv_build>=0.12.2,<0.13.0"]

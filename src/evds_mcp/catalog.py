@@ -43,6 +43,7 @@ class SeriKunye:
     toplama: str
     baslangic: str
     bitis: str
+    sira: int          # EVDS'nin kendi ekran sirasi; bassliklar once geliyor
 
     @property
     def _aranacak(self) -> str:
@@ -96,6 +97,16 @@ def _arsiv_mi(ad: str) -> bool:
     return "arsiv" in arama_anahtari(ad)
 
 
+def _turkiye_mi(kunye) -> bool:
+    """Uluslararası karşılaştırma gruplarında Türkiye'yi öne almak için.
+
+    IMF ve BIS grupları ülkeleri alfabetik diziyor; "politika faizi"
+    araması Almanya'yı getirip Türkiye'yi 470. sıraya gömüyordu. Türkiye
+    verisi için yazılmış bir arayüzde bu kabul edilebilir değil.
+    """
+    return kunye.kod.upper().endswith(".TUR") or "turkiye" in arama_anahtari(kunye.ad)
+
+
 def _sirala(adaylar, sorgu: str, limit: int):
     a = arama_anahtari(sorgu)
     if not a:
@@ -138,7 +149,25 @@ class Katalog:
         return [_seri_yap(h) for h in ham]
 
     def seri_ara(self, sorgu: str, grup_kodu: str, limit: int = 20) -> list[SeriKunye]:
-        return _sirala(self.grup_serileri(grup_kodu), sorgu, limit)
+        """Gruptaki serileri sorguya göre sıralar ama elemez.
+
+        Elemek işe yaramıyor: grup adı "Tüketici Fiyat Endeksi" olsa da
+        içindeki seriler "Genel Endeks", "Gıda ve alkolsüz içecekler"
+        diye geçiyor, sorgu kelimesi hiçbirinde yok. Grup zaten eşleştiği
+        için doğru yerdeyiz -- eşleşen seri varsa öne al, yoksa EVDS'nin
+        kendi ekran sırasına düş. Baslık seriler orada zaten önde.
+        """
+        seriler = self.grup_serileri(grup_kodu)
+        a = _genislet(arama_anahtari(sorgu)) if sorgu else ""
+        seriler.sort(
+            key=lambda s: (
+                -_puan(a, s._aranacak) if a else 0,
+                not _turkiye_mi(s),
+                _arsiv_mi(s.ad),
+                s.sira,
+            )
+        )
+        return seriler[:limit]
 
 
 def _metin(ham: dict, *anahtarlar: str) -> str:
@@ -172,4 +201,5 @@ def _seri_yap(ham: dict) -> SeriKunye:
         # almaktan iyi. Arşivlenmiş seriler buradan belli oluyor.
         baslangic=_metin(ham, "START_DATE"),
         bitis=_metin(ham, "END_DATE"),
+        sira=int(ham.get("SCREEN_ORDER") or 9999),
     )

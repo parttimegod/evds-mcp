@@ -18,14 +18,11 @@ diyorsun, gidip getiriyor.
 
 ## Durum
 
-Erken. Şu an çalışan:
+Çalışıyor ama erken. Üç araç var, MCP üzerinden bağlanıyor.
 
-- EVDS istemcisi — seri verisi, veri grubu listesi, gruptaki seriler
-- Katalog ve arama — 676 veri grubu içinde puanlı arama, grup içinde seri arama
-- Türkçe metin normalizasyonu
-
-Henüz olmayan: MCP katmanının kendisi. Sıradaki iş o. Ertelediğim her şey
-`SONRA.md` içinde.
+Henüz yok: kalıcı önbellek, TÜİK, anlamsal arama. Bir de asıl hedef olan
+metodoloji katmanı — modele ekonometrik iş akışını dayatan kısım. Onlar ve
+ertelediğim diğer her şey `SONRA.md` içinde.
 
 ## Kurulum
 
@@ -38,53 +35,58 @@ uv sync
 API anahtarını [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr) adresinden
 ücretsiz alıyorsun — profil sayfasının altındaki "API Anahtarı Kopyala".
 
-```
-export EVDS_API_KEY=...
+## MCP'ye bağlama
+
+```json
+{
+  "mcpServers": {
+    "evds": {
+      "command": "uv",
+      "args": ["--directory", "/evds-mcp/dizininin/yolu", "run", "evds-mcp"],
+      "env": { "EVDS_API_KEY": "anahtarin" }
+    }
+  }
+}
 ```
 
-## Kullanım
+Sonrası konuşma dilinde:
+
+> 2025'te TÜFE ne kadar arttı?
+
+## Araçlar
+
+**`search_series`** — Türkçe ya da İngilizce kavram ver, seri kodlarını
+bulur. Her iş buradan başlıyor, çünkü kodları kimse ezbere bilmiyor.
+Dönen künyede kapsam tarihleri de var; EVDS'de yayını durmuş çok sayıda
+arşiv serisi duruyor, hangisinin canlı olduğu oradan görülüyor.
+
+**`summarize_series`** — Ham veriyi dökmeden bakar: gözlem sayısı, eksik
+veri, min, max, ortalama, toplam değişim.
+
+**`get_series`** — Veriyi getirir, birden fazla kod alabilir.
+Varsayılan olarak özet ve son 24 gözlem döner. Bu bir kısıtlama değil
+tasarım: 2003'ten beri aylık bir seri 280 gözlem eder, üç seri istendiğinde
+bağlam sayıyla dolar ve model düzgün düşünemez. Tamamı gerekiyorsa
+`full=True`.
+
+## Python'dan
 
 ```python
 from datetime import date
 from evds_mcp.client import EVDS
-
-with EVDS() as evds:
-    tufe, faiz = evds.veri(
-        ["TP.FG.J0", "TP.APIFON4"],
-        baslangic=date(2024, 1, 1),
-        bitis=date(2024, 6, 1),
-    )
-
-for a, b in zip(tufe.gozlemler, faiz.gozlemler):
-    print(a.tarih, a.deger, b.deger)
-```
-
-```
-2024-1 1984.02 44.0
-2024-2 2073.88 45.0
-2024-3 2139.47 51.22
-...
-```
-
-Aramayla birlikte tam döngü:
-
-```python
 from evds_mcp.catalog import Katalog
 
 with EVDS() as evds:
     k = Katalog(evds)
 
-    gruplar = k.grup_ara("enflasyon")
+    k.grup_ara("enflasyon")
     # bie_tukfiy2025  Tüketici Fiyat Endeksi (2025=100)  [AYLIK]
 
-    seriler = k.seri_ara("genel", "bie_tukfiy2025")
+    k.seri_ara("genel", "bie_tukfiy2025")
     # TP.TUKFIY2025.GENEL  Genel Endeks  01-01-2005 - 01-07-2026
 
     evds.veri(["TP.TUKFIY2025.GENEL"], date(2025, 1, 1), date(2025, 5, 1))
 ```
-
-Künyede kapsam tarihleri de var, çünkü EVDS'de bir sürü arşivlenmiş seri
-duruyor; hangisinin hâlâ yayınlandığını veriyi çekmeden görmek gerekiyor.
 
 ## Notlar
 
@@ -106,10 +108,14 @@ değil:
 ```
 
 `requests` ya da `httpx`'in `params=` parametresini kullanırsanız başa `?`
-koyuyor ve servis anlamıyor. URL'yi elle kurmak gerekiyor.
+koyuyor ve servis anlamıyor.
+
+**Toplu seri ucu yok.** 676 veri grubu var ve serileri ancak grup kodu
+vererek çekebiliyorsunuz. Bu yüzden arama iki seviyeli: önce grup, sonra
+grup içinde seri.
 
 **Sütun adlarında nokta yerine alt çizgi.** `TP.FG.J0` istiyorsunuz,
-yanıtta `TP_FG_J0` geliyor. İkisine de bakıyoruz.
+yanıtta `TP_FG_J0` geliyor.
 
 **Tarih formatı `GG-AA-YYYY`.** ISO değil. Karıştırırsanız API hata
 vermiyor, sessizce başka bir aralık dönüyor — en sinsi olanı bu.
@@ -118,12 +124,14 @@ vermiyor, sessizce başka bir aralık dönüyor — en sinsi olanı bu.
 
 **Türkçe küçük harf.** `"FAİZ".lower()` beklediğinizi vermiyor;
 `"I".lower()` size `"i"` döndürüyor, `"ı"` değil. Aramada bunu
-kullanırsanız hata almıyorsunuz, sadece sonuç gelmiyor. `text.py` bunun
-için var.
+kullanırsanız hata almıyorsunuz, sadece sonuç gelmiyor.
+
+**Uluslararası gruplar ülkeleri alfabetik diziyor.** "politika faizi"
+araması Almanya'yı getirip Türkiye'yi 470. sıraya gömüyordu. Sıralamada
+Türkiye eşitlik bozucu.
 
 Bir de yanlış alarm: yanıtlardaki Türkçe karakterler bozuk *görünüyor*
-ama değil. Üç uçta da geçerli UTF-8 geliyor; bozan şey Windows
-konsolunun kod sayfası.
+ama değil. Geçerli UTF-8 geliyor; bozan şey Windows konsolunun kod sayfası.
 
 ## Testler
 
@@ -132,8 +140,8 @@ uv run pytest          # cevrimdisi, fixture'lara karsi
 uv run pytest -m live  # gercek API, EVDS_API_KEY gerekiyor
 ```
 
-`tests/fixtures/` altındakiler gerçek EVDS yanıtları, bir kez kaydedildi.
-Servis şekil değiştirirse önce bu testler kırılır.
+`tests/fixtures/` altındakiler gerçek EVDS yanıtları. Servis şekil
+değiştirirse önce bu testler kırılır.
 
 ## Lisans
 
