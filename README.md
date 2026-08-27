@@ -75,7 +75,8 @@ dönüşümü bulur. ADF'yi seviyede, log farkında ve ardışık farklarda
 **`analyze_relationship`** — İki seri arasındaki ilişkiyi verir, ama
 önce her ikisini durağanlık testinden geçirip gereken dönüşümü uygular
 ve hangi dönüşümü uyguladığını yazar. İkisi de I(1) ise eşbütünleşmeyi
-de test eder.
+de test eder. `max_lag` ile gecikmeli ilişki taranıyor, `transform` ile
+dönüşüm elle seçilebiliyor.
 
 ### Neden ham korelasyon aracı yok
 
@@ -91,8 +92,34 @@ etiketiyle ve nedeniyle birlikte.
 
 Bir de Türkiye'ye özel olan kısım: TÜFE bu dönemde **I(2)**. Yani bir fark
 yetmiyor, log farkı da yetmiyor. Modelin ezberindeki "fiyat endeksinde log
-farkı al" kuralı burada yanlış cevap üretiyor. Ölçümlerin tamamı
-`ASAMA2.md` içinde.
+farkı al" kuralı burada yanlış cevap üretiyor.
+
+### Gecikme
+
+İktisatta ilişkiler çoğu zaman eşanlı değil. Kur geçişkenliğini ölçtüm —
+USD/TRY ile TÜFE, aylık yüzde değişim:
+
+```
+gecikme 0 ay : +0.42
+gecikme 1 ay : +0.57   <- tepe
+gecikme 2 ay : +0.34
+gecikme 3 ay : +0.21
+```
+
+Kur bugün hareket ediyor, fiyata bir ay sonra geçiyor. Sadece eşanlı
+bakan bir analiz ilişkiyi olduğundan zayıf gösterir. `max_lag` bunun
+için var; tepe eşanlı değilse çıktı uyarıyor.
+
+Aynı soruya üç farklı cevap çıkıyor ve aradaki fark ekonometri bilmek
+demek:
+
+```
+ham seviye korelasyonu     0.99   <- model bunu söylerdi
+otomatik dönüşüm (d2)      0.15   <- aşırı farklanmış
+logd1, gecikme 1           0.57   <- doğru cevap
+```
+
+Ölçümlerin tamamı `ASAMA2.md` içinde.
 
 ## Python'dan
 

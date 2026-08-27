@@ -162,3 +162,69 @@ def test_sahte_korelasyon_dusuyor():
 
     assert temiz < 0.2, "bağımsız serilerde dönüşüm sonrası korelasyon düşük olmalı"
     assert temiz < ham
+
+
+def gecikmeli_seri(n=200, gecikme=2, tohum=0):
+    """b, a'nın `gecikme` dönem sonraki yankısı olsun."""
+    import random
+    r = random.Random(tohum)
+    a = [r.gauss(0, 1) for _ in range(n)]
+    b = [0.0] * gecikme + [a[i - gecikme] + r.gauss(0, 0.3) for i in range(gecikme, n)]
+    return a, b
+
+
+def test_gecikme_tepesini_buluyor():
+    from evds_mcp.analysis import gecikmeli_korelasyon
+
+    a, b = gecikmeli_seri(gecikme=3)
+    g = gecikmeli_korelasyon(a, b, maks_gecikme=8)
+
+    assert g["tepe_gecikme"] == 3
+    assert g["tepe_korelasyon"] > g["profil"][0]
+
+
+def test_gecikme_profili_tam():
+    from evds_mcp.analysis import gecikmeli_korelasyon
+
+    a, b = gecikmeli_seri()
+    g = gecikmeli_korelasyon(a, b, maks_gecikme=5)
+
+    assert list(g["profil"]) == list(range(6))
+
+
+def test_negatif_gecikme_reddediliyor():
+    from evds_mcp.analysis import gecikmeli_korelasyon
+
+    with pytest.raises(AnalizHatasi, match="negatif"):
+        gecikmeli_korelasyon(beyaz_gurultu(), beyaz_gurultu(), maks_gecikme=-1)
+
+
+def test_cok_buyuk_gecikme_reddediliyor():
+    from evds_mcp.analysis import gecikmeli_korelasyon
+
+    with pytest.raises(AnalizHatasi, match="yeterli gözlem"):
+        gecikmeli_korelasyon(beyaz_gurultu(30), beyaz_gurultu(30), maks_gecikme=25)
+
+
+def test_iliski_gecikmeyi_raporluyor():
+    a, b = gecikmeli_seri(gecikme=2, tohum=3)
+    s = iliski(a, b, "A", "B", maks_gecikme=6)
+
+    assert s["gecikme"]["tepe_gecikme"] == 2
+    assert any("gecikmede" in u for u in s["uyarilar"])
+
+
+def test_zorlanan_donusum_uygulaniyor():
+    a = rassal_yuruyus(tohum=20, baslangic=1000.0)
+    b = rassal_yuruyus(tohum=21, baslangic=1000.0)
+    s = iliski(a, b, "A", "B", donusum_zorla="logd1")
+
+    assert s["donusum"] == "logd1"
+
+
+def test_zorlanan_donusum_duraganlastirmiyorsa_uyariyor():
+    a = iki_kez_butunlesik(tohum=22, baslangic=1000.0)
+    b = rassal_yuruyus(tohum=23, baslangic=1000.0)
+    s = iliski(a, b, "A", "B", donusum_zorla="logd1")
+
+    assert any("durağanlaştırmıyor" in u for u in s["uyarilar"])

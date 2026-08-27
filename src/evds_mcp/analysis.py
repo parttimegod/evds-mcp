@@ -140,7 +140,48 @@ def esbutunlesme(a: list[float], b: list[float]) -> float:
     return float(coint(a[-n:], b[-n:])[1])
 
 
-def iliski(a: list[float], b: list[float], ad_a: str, ad_b: str) -> dict:
+def gecikmeli_korelasyon(
+    a: list[float],
+    b: list[float],
+    maks_gecikme: int = 12,
+) -> dict:
+    """a'nın b'yi kaç dönem önceden takip ettiğini arar.
+
+    Ekonomide ilişkiler çoğu zaman eşanlı değil. Kur geçişkenliği ölçüldü:
+    eşanlı korelasyon 0.42, bir ay gecikmede 0.57. Sadece eşanlı bakan bir
+    analiz ilişkiyi olduğundan zayıf gösteriyor.
+
+    Gecikme k, a'nın k dönem öncesinin b ile korelasyonu demek.
+    """
+    if maks_gecikme < 0:
+        raise AnalizHatasi("Gecikme negatif olamaz.")
+    n = min(len(a), len(b))
+    a, b = a[-n:], b[-n:]
+    if n - maks_gecikme < ASGARI_GOZLEM:
+        raise AnalizHatasi(
+            f"{maks_gecikme} gecikme için yeterli gözlem yok ({n} var). "
+            "Aralığı genişlet ya da maks_gecikme'yi düşür."
+        )
+
+    profil = {}
+    for k in range(maks_gecikme + 1):
+        x = a[: n - k] if k else a
+        y = b[k:]
+        m = min(len(x), len(y))
+        profil[k] = round(korelasyon(x[:m], y[:m]), 4)
+
+    tepe = max(profil, key=lambda k: abs(profil[k]))
+    return {"profil": profil, "tepe_gecikme": tepe, "tepe_korelasyon": profil[tepe]}
+
+
+def iliski(
+    a: list[float],
+    b: list[float],
+    ad_a: str,
+    ad_b: str,
+    donusum_zorla: str | None = None,
+    maks_gecikme: int = 0,
+) -> dict:
     """İki seri arasındaki ilişkiyi metodolojik kontrollerden geçirerek verir.
 
     Ham seviye korelasyonu da dönüyor ama açıkça "kullanma" etiketiyle --
@@ -157,14 +198,36 @@ def iliski(a: list[float], b: list[float], ad_a: str, ad_b: str) -> dict:
         )
 
     ortak = max(da.derece, db.derece)
-    if da.derece != db.derece:
+    dereceler_farkli = da.derece != db.derece
+    if dereceler_farkli:
         uyarilar.append(
             f"Bütünleşme dereceleri farklı: {ad_a} I({da.derece}), "
-            f"{ad_b} I({db.derece}). Her ikisi de {ortak}. dereceden "
-            "farklandı; düşük dereceli seri aşırı farklanmış olabilir."
+            f"{ad_b} I({db.derece})."
         )
 
-    donusum = "logd1" if (ortak == 1 and da.log_yeterli and db.log_yeterli) else f"d{ortak}"
+    if donusum_zorla:
+        donusum = donusum_zorla
+        # Zorlanan dönüşüm durağanlaştırmıyorsa sustuğumuz için değil,
+        # söylediğimiz için sorumluluk kullanıcıda olsun.
+        for ad, seri_, d in ((ad_a, a, da), (ad_b, b, db)):
+            p = d.p_degerleri.get(donusum)
+            if p is not None and p >= ALFA:
+                uyarilar.append(
+                    f"{ad}: istenen dönüşüm ({donusum}) bu seriyi "
+                    f"durağanlaştırmıyor (ADF p={p:.4f}). Sonuç şişkin olabilir."
+                )
+    else:
+        donusum = (
+            "logd1" if (ortak == 1 and da.log_yeterli and db.log_yeterli) else f"d{ortak}"
+        )
+        if dereceler_farkli:
+            uyarilar.append(
+                f"İkisi de {ortak}. dereceden farklandı; düşük dereceli seri "
+                "aşırı farklanmış ve ilişki olduğundan zayıf görünüyor olabilir. "
+                "İktisadi olarak anlamlı dönüşümü biliyorsan donusum_zorla ile "
+                "ver (yüzde değişim için 'logd1')."
+            )
+
     ta, tb = donustur(a, donusum), donustur(b, donusum)
 
     sonuc = {
@@ -188,6 +251,16 @@ def iliski(a: list[float], b: list[float], ad_a: str, ad_b: str) -> dict:
             "tek başına yetmez."
         ),
     }
+
+    if maks_gecikme:
+        g = gecikmeli_korelasyon(ta, tb, maks_gecikme)
+        sonuc["gecikme"] = g
+        if g["tepe_gecikme"] > 0:
+            uyarilar.append(
+                f"En güçlü ilişki {g['tepe_gecikme']}. gecikmede "
+                f"({g['tepe_korelasyon']}), eşanlı değil ({sonuc['korelasyon']}). "
+                "Eşanlı rakama bakmak ilişkiyi olduğundan zayıf gösterir."
+            )
 
     # İki seri de I(1) ise seviyelerde uzun dönem ilişki olabilir.
     if da.derece == db.derece == 1:

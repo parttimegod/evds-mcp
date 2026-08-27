@@ -311,6 +311,8 @@ def analyze_relationship(
     start: str,
     end: str,
     frequency: str = "aylık",
+    transform: str | None = None,
+    max_lag: int = 0,
 ) -> dict:
     """İki seri arasındaki ilişkiyi metodolojik kontrollerden geçirip verir.
 
@@ -324,12 +326,25 @@ def analyze_relationship(
     dönüşümü uygular, hangi dönüşümü uyguladığını söyler ve sonucu
     ondan sonra verir. İkisi de I(1) ise eşbütünleşmeyi de test eder.
 
+    İki serinin bütünleşme derecesi farklıysa araç ikisini de yüksek
+    dereceden farklar ve bu sinyali zayıflatabilir; böyle bir durumda
+    iktisadi olarak doğru dönüşümü biliyorsan transform ile ver.
+
+    İktisatta ilişkiler çoğu zaman eşanlı değildir. Kur geçişkenliği
+    ölçüldü: eşanlı korelasyon 0.42, bir ay gecikmede 0.57. Gecikmeli
+    olabileceğini düşündüğün her ilişkide max_lag ver.
+
     Args:
         codes: Tam olarak iki seri kodu.
         start: Başlangıç, YYYY-AA-GG.
         end: Bitiş, YYYY-AA-GG.
         frequency: günlük, işgünü, haftalık, ayda2, aylık, çeyreklik,
             6aylık, yıllık.
+        transform: Dönüşümü elle seç. "logd1" yüzde değişim demek ve
+            fiyat, kur, endeks gibi serilerde iktisadi karşılığı olan
+            dönüşüm budur. "d1", "d2" fark alır, "seviye" dokunmaz.
+            Boş bırakılırsa durağanlık testine göre seçilir.
+        max_lag: Kaç döneme kadar gecikme taransın. 0 ise sadece eşanlı.
     """
     evds, _ = _baglan()
     if len(codes) != 2:
@@ -357,7 +372,14 @@ def analyze_relationship(
         )
 
     try:
-        sonuc = iliski([a for a, _ in cift], [b_ for _, b_ in cift], codes[0], codes[1])
+        sonuc = iliski(
+            [a for a, _ in cift],
+            [b_ for _, b_ in cift],
+            codes[0],
+            codes[1],
+            donusum_zorla=transform,
+            maks_gecikme=max_lag,
+        )
     except AnalizHatasi as e:
         raise ToolError(str(e)) from e
 

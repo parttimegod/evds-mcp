@@ -103,4 +103,54 @@ Ek olarak: iki seri de I(1) ise Engle-Granger eşbütünleşme testi
 çalışıyor. Eşbütünleşme varsa sadece farklarla çalışmak uzun dönem
 bilgisini atar, çıktı bunu söylüyor.
 
-Deney betiği repoda yok, tek seferlikti; sayılar yukarıda.
+## Aracı kullanırken çıkan iki eksik
+
+Metodoloji katmanı bittikten sonra aracı gerçek bir soruyla denedim:
+kur geçişkenliği. İki eksik ortaya çıktı, ikisi de düzeltildi.
+
+### Eksik 1: gecikme yok
+
+USD/TRY ve TÜFE, aylık log farkı, 2010-2026:
+
+```
+gecikme 0 ay : +0.421
+gecikme 1 ay : +0.568   <- tepe
+gecikme 2 ay : +0.336
+gecikme 3 ay : +0.208
+...
+gecikme 12 ay: -0.034
+```
+
+Kur geçişkenliği bir ay gecikmeyle en güçlü. Sadece eşanlı bakan bir
+analiz ilişkiyi olduğundan zayıf gösteriyor. `max_lag` eklendi; tepe
+eşanlı değilse çıktı bunu uyarı olarak söylüyor.
+
+### Eksik 2: dereceler farklıysa aşırı farklama
+
+USD/TRY I(1), TÜFE I(2). Araç ikisini de d2'ye zorlayınca korelasyon
+0.155 çıkıyordu — sinyal farklamada eriyor. Oysa iktisadi olarak doğru
+dönüşüm ikisi için de log farkı (yüzde değişim): 0.421.
+
+`transform` parametresi eklendi. Dönüşüm elle verilebiliyor, ama seriyi
+durağanlaştırmıyorsa araç bunu söylüyor:
+
+```
+TP.TUKFIY2025.GENEL: istenen dönüşüm (logd1) bu seriyi durağanlaştırmıyor
+(ADF p=0.3512). Sonuç şişkin olabilir.
+```
+
+Susup uygulamak da, reddetmek de yanlış olurdu. Doğrusu uygulayıp
+sorumluluğu görünür kılmak.
+
+### Aynı sorunun üç cevabı
+
+```
+ham seviye korelasyonu     0.9856   <- model bunu söylerdi
+otomatik dönüşüm (d2)      0.1546   <- aşırı farklanmış
+logd1, gecikme 1           0.5685   <- doğru cevap
+```
+
+Üçü de aynı veriden çıkıyor. Aradaki farkı bilmek ekonometri bilmek
+demek — aracın varlık sebebi bu.
+
+Deney betikleri repoda yok, tek seferlikti; sayılar yukarıda.
