@@ -64,15 +64,37 @@ ESANLAMLI = {
     "ufe": ["uretici fiyat endeksi"],
     "cari acik": ["cari islemler", "odemeler dengesi"],
     "cari denge": ["cari islemler", "odemeler dengesi"],
+    # Nominal kur grubunun adi sadece "Doviz Kurlari"; icinde "dolar"
+    # gecmiyor. Oysa EVDS'nin en cok istenen serisi orada.
+    "dolar": ["doviz kurlari"],
+    "usd": ["doviz kurlari"],
+    "euro": ["doviz kurlari"],
+    "avro": ["doviz kurlari"],
+    "kur": ["doviz kurlari"],
 }
+
+# Önek eşleşmesi bunun altındaki kelimelerde yapılmıyor; "kur" gibi kısa
+# kökler "kurum", "kuruluş" gibi alakasız kelimeleri yakalıyor.
+ASGARI_KOK = 4
 
 
 def _genislet(sorgu: str) -> str:
-    """Sorguya eşanlamlılarını ekler. Önce tüm ifadeye, sonra kelimelere bakar."""
+    """Sorguya eşanlamlılarını ekler.
+
+    Türkçe eklemeli bir dil: "dolar" ile "doları" tam eşleşmiyor. Ekler
+    sona geldiği için sözlük anahtarını önek olarak arıyoruz -- kaba ama
+    bu boyutta bir sözlük için gövdeleyiciden daha az sürprizli.
+    """
     parcalar = [sorgu]
     parcalar += ESANLAMLI.get(sorgu, [])
     for kelime in sorgu.split():
-        parcalar += ESANLAMLI.get(kelime, [])
+        if kelime in ESANLAMLI:
+            parcalar += ESANLAMLI[kelime]
+            continue
+        for kok, karsilik in ESANLAMLI.items():
+            if len(kok) >= ASGARI_KOK and " " not in kok and kelime.startswith(kok):
+                parcalar += karsilik
+                break
     return " ".join(parcalar)
 
 

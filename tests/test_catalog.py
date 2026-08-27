@@ -188,3 +188,21 @@ def test_ekran_sirasi_okunuyor():
 
 def test_ekran_sirasi_yoksa_sona():
     assert _seri_yap({"SERIE_CODE": "TP.X"}).sira == 9999
+
+
+@pytest.mark.parametrize("sorgu", ["dolar kuru", "amerikan doları alış", "euro kuru"])
+def test_nominal_kur_grubunu_buluyor(gruplar, sorgu):
+    # Nominal kur grubunun adı sadece "Döviz Kurları"; "dolar" içinde
+    # geçmiyor. Eşanlamlı olmadan bu sorgular reel efektif kura düşüyordu.
+    assert _sirala(gruplar, sorgu, 3)[0].kod == "bie_dkdovytl"
+
+
+def test_turkce_ekler_onek_eslesmesiyle_yakalaniyor():
+    # "doları" tam eşleşmiyor ama "dolar" ile başlıyor.
+    assert "doviz kurlari" in _genislet("dolari")
+    assert "doviz kurlari" in _genislet("dolarin")
+
+
+def test_kisa_kokler_onek_eslesmesine_girmiyor():
+    # "kur" kökü "kurumsal", "kuruluş" gibi kelimeleri yakalamamalı.
+    assert "doviz kurlari" not in _genislet("kurumsal")
