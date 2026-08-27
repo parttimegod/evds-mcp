@@ -1,0 +1,22 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-extras
+
+      # Testler ağa çıkmıyor, API anahtarı gerekmiyor. Canlı test
+      # -m 'not live' ile zaten dışarıda.
+      - run: uv run pytest -q

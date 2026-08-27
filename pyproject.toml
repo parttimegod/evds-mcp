@@ -3,6 +3,8 @@ name = "evds-mcp"
 version = "0.1.0"
 description = "TCMB EVDS verisi icin MCP sunucusu"
 readme = "README.md"
+license = "MIT"
+authors = [{ name = "Emirhan Miralay" }]
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.4.7",

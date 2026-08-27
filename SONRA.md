@@ -42,4 +42,3 @@ Kalanlar:
 ## Ambalaj
 - PyPI'ya yükleme
 - README'ye örnek oturum kaydı (asciinema?)
-- CI
