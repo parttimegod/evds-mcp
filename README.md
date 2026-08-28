@@ -1,25 +1,26 @@
 # evds-mcp
 
-TCMB EVDS verilerine erişim sağlayan MCP sunucusu. Claude ve diğer MCP
-destekli istemcilerden Türkiye makroekonomik verilerini sorgulayabilir,
-durağanlık testi ve ilişki analizi yapabilirsiniz.
+MCP server for the Central Bank of Türkiye's statistical database (EVDS).
+Lets Claude and other MCP clients search, fetch and analyse Turkish
+macroeconomic time series, with stationarity testing built into the
+relationship analysis.
 
-## Özellikler
+## Features
 
-- Kavram bazlı seri arama (676 veri grubu, Türkçe ve İngilizce)
-- Tek veya çoklu seri verisi çekme
-- ADF durağanlık testi, bütünleşme derecesi tespiti
-- İki seri arası ilişki analizi: otomatik dönüşüm, gecikme taraması,
-  Engle-Granger eşbütünleşme testi
-- Türkçe karakter normalizasyonu
+- Concept-based series search across 676 data groups (Turkish and English)
+- Single or multi-series data retrieval
+- ADF stationarity testing and order-of-integration detection
+- Relationship analysis with automatic transformation, lag scanning and
+  Engle-Granger cointegration testing
+- Turkish text normalisation for search
 
-## Gereksinimler
+## Requirements
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
-- EVDS API anahtarı (ücretsiz)
+- An EVDS API key (free)
 
-## Kurulum
+## Installation
 
 ```bash
 git clone https://github.com/parttimegod/evds-mcp
@@ -27,13 +28,12 @@ cd evds-mcp
 uv sync
 ```
 
-API anahtarını almak için [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr)
-adresine kaydolun. Profil sayfasının altındaki "API Anahtarı Kopyala"
-butonunu kullanın.
+Register at [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr) to get an API
+key. It is at the bottom of your profile page, under "Copy API Key".
 
-## Yapılandırma
+## Configuration
 
-MCP istemcinizin yapılandırma dosyasına ekleyin:
+Add the server to your MCP client config:
 
 ```json
 {
@@ -47,89 +47,97 @@ MCP istemcinizin yapılandırma dosyasına ekleyin:
 }
 ```
 
-Claude Desktop için `claude_desktop_config.json`, Claude Code için
-`~/.claude.json` dosyasını düzenleyin.
+Claude Desktop uses `claude_desktop_config.json`; Claude Code uses
+`~/.claude.json`.
 
-## Kullanım
+## Usage
 
-Yapılandırdıktan sonra doğal dille sorabilirsiniz:
+Once configured, ask in plain language:
 
 ```
-2020'den beri TÜFE ve politika faizini getir
-Konut fiyat endeksi hangi tarihten beri yayınlanıyor?
-Dolar kuru ile enflasyon arasında ilişki var mı?
+Get CPI and the policy rate since 2020
+How far back does the house price index go?
+Is there a relationship between the dollar rate and inflation?
 ```
 
-## Araçlar
+## Tools
 
 ### `search_series(query, limit=10)`
 
-Kavramdan seri kodu bulur. Seri kodları (`TP.FG.J0` gibi) ezberlenmediği
-için arama buradan başlar.
+Finds series codes from a concept. Series codes such as `TP.FG.J0` are
+not memorable, so every session starts here. Queries work in Turkish and
+English.
 
-Dönen alanlar: kod, ad, İngilizce ad, veri grubu, frekans, kaynak,
-kapsam tarihleri.
+Returns code, name, English name, data group, frequency, source and
+coverage dates for each match.
 
-### `summarize_series(code, start, end, frequency="aylık")`
+### `summarize_series(code, start, end, frequency="monthly")`
 
-Seriyi ham veri döndürmeden özetler: gözlem sayısı, eksik veri, ilk ve
-son değer, min, max, ortalama, toplam değişim.
+Summarises a series without returning raw observations: count, missing
+values, first and last value, min, max, mean, total change.
 
-### `get_series(codes, start, end, frequency="aylık", full=False)`
+### `get_series(codes, start, end, frequency="monthly", full=False)`
 
-Seri verisini getirir. Birden fazla kod verilebilir, aynı tarih
-ızgarasına hizalı döner.
+Fetches series data. Accepts multiple codes and returns them aligned on
+the same date grid.
 
-Varsayılan olarak özet ve son 24 gözlem döner. 2003'ten beri aylık bir
-seri 280 gözlem içerir ve birkaç seri birlikte istendiğinde bağlam
-penceresini doldurur. Tüm gözlemler için `full=True` kullanın.
+By default it returns a summary plus the last 24 observations. A monthly
+series starting in 2003 has around 280 observations, and requesting a few
+of them at once fills the context window. Pass `full=True` for everything.
 
-### `test_stationarity(code, start, end, frequency="aylık")`
+### `test_stationarity(code, start, end, frequency="monthly")`
 
-ADF testini seviyede, log farkında ve ardışık farklarda çalıştırır.
-Bütünleşme derecesini I(d) ve önerilen dönüşümü döndürür.
+Runs ADF at level, on the log difference and on successive differences.
+Returns the order of integration I(d) and the recommended transformation.
 
-### `analyze_relationship(codes, start, end, frequency="aylık", transform=None, max_lag=0)`
+### `analyze_relationship(codes, start, end, frequency="monthly", transform=None, max_lag=0)`
 
-İki seri arasındaki ilişkiyi analiz eder. Önce her iki seriyi durağanlık
-testinden geçirir, gereken dönüşümü uygular ve hangi dönüşümü
-uyguladığını çıktıda belirtir. Her iki seri de I(1) ise Engle-Granger
-eşbütünleşme testi çalıştırır.
+Analyses the relationship between two series. Both are tested for
+stationarity first, the required transformation is applied, and the
+output states which transformation was used. If both series are I(1) it
+also runs an Engle-Granger cointegration test.
 
-- `transform` — dönüşümü elle seçer (`logd1`, `d1`, `d2`, `seviye`)
-- `max_lag` — gecikmeli ilişki tarar, en güçlü gecikmeyi bildirir
+- `transform` — set the transformation manually: `logd1`, `d1`, `d2`,
+  `level`
+- `max_lag` — scan lagged relationships and report the strongest lag
 
-## Neden ham korelasyon aracı yok
+Frequency values accept both English and Turkish: `daily`, `business`,
+`weekly`, `semimonthly`, `monthly`, `quarterly`, `semiannual`, `annual`.
 
-Seviye korelasyonu hesaplayan ayrı bir araç bulunmuyor. Makroekonomik
-seriler genellikle durağan değildir ve seviye korelasyonu ortak trend
-nedeniyle yanıltıcı sonuç verir.
+## Why there is no raw correlation tool
 
-USD/TRY ve TÜFE, aylık, 2010-01 – 2026-06:
+There is no tool that computes a level correlation. Macroeconomic series
+are usually non-stationary, and correlating them at level produces
+spurious results driven by a shared trend.
 
-| Yöntem | Korelasyon | Not |
+USD/TRY and CPI, monthly, 2010-01 to 2026-06:
+
+| Method | Correlation | Note |
 |---|---|---|
-| Seviye | 0.99 | Sahte regresyon (ADF p = 1.00 ve 0.99) |
-| Otomatik dönüşüm (d2) | 0.15 | Aşırı farklanmış: USD/TRY I(1), TÜFE I(2) |
-| Log farkı + 1 ay gecikme | 0.57 | |
+| Level | 0.99 | Spurious regression (ADF p = 1.00 and 0.99) |
+| Automatic transform (d2) | 0.15 | Over-differenced: USD/TRY is I(1), CPI is I(2) |
+| Log difference + 1 month lag | 0.57 | |
 
-Gecikme profili:
+Lag profile:
 
 ```
-0 ay  +0.42
-1 ay  +0.57
-2 ay  +0.34
-3 ay  +0.21
+0 months  +0.42
+1 month   +0.57
+2 months  +0.34
+3 months  +0.21
 ```
 
-`analyze_relationship` seviye korelasyonunu yine döndürür, uyarı
-etiketiyle birlikte.
+`analyze_relationship` still returns the level correlation, labelled with
+a warning.
 
-TÜFE bu dönemde I(2)'dir; ne birinci fark ne de log farkı seriyi
-durağanlaştırır. ADF çıktılarının tamamı [ASAMA2.md](ASAMA2.md)
-dosyasındadır.
+Turkish CPI is I(2) over this period: neither first differencing nor log
+differencing makes it stationary. Full ADF output is in
+[ASAMA2.md](ASAMA2.md) (Turkish).
 
 ## Python API
+
+The library can be used directly. Note that internal method names are in
+Turkish; the MCP tool names are English.
 
 ```python
 from datetime import date
@@ -139,52 +147,52 @@ from evds_mcp.catalog import Katalog
 with EVDS() as evds:
     k = Katalog(evds)
 
-    k.grup_ara("enflasyon")                # bie_tukfiy2025
+    k.grup_ara("inflation")                # bie_tukfiy2025
     k.seri_ara("genel", "bie_tukfiy2025")  # TP.TUKFIY2025.GENEL
 
-    seriler = evds.veri(
+    series = evds.veri(
         ["TP.TUKFIY2025.GENEL"],
         date(2025, 1, 1),
         date(2025, 5, 1),
     )
 ```
 
-## EVDS API notları
+## Notes on the EVDS API
 
-Servis endpoint'i:
+The service endpoint is:
 
 ```
 https://evds3.tcmb.gov.tr/igmevdsms-dis/
 ```
 
-Yaygın örneklerde geçen `evds2.tcmb.gov.tr/service/evds/` adresi web
-arayüzüne yönlendirir ve HTML döndürür.
+Most examples online still point at `evds2.tcmb.gov.tr/service/evds/`,
+which now redirects to the web interface and returns HTML.
 
-| Konu | Durum |
+| Topic | Behaviour |
 |---|---|
-| Kimlik doğrulama | HTTP header (`key`). 2024 öncesinde URL parametresiydi |
-| Parametre biçimi | Yola eklenir: `.../igmevdsms-dis/series=TP.FG.J0&startDate=...` |
-| `params=` kullanımı | Başa `?` ekler, servis kabul etmez |
-| Tarih formatı | `GG-AA-YYYY`. Yanlış format hata vermez, farklı aralık döner |
-| Toplu seri ucu | Yok. Seriler grup kodu ile çekilir |
-| Sütun adları | İstek `TP.FG.J0`, yanıt `TP_FG_J0` |
-| Uluslararası gruplar | Alfabetik sıralı, Türkiye 470. sırada olabilir |
+| Authentication | HTTP header (`key`). It was a URL parameter before 2024 |
+| Parameter format | Appended to the path: `.../igmevdsms-dis/series=TP.FG.J0&startDate=...` |
+| Using `params=` | Adds a leading `?`, which the service rejects |
+| Date format | `DD-MM-YYYY`. A wrong format returns a different range instead of an error |
+| Bulk series endpoint | None. Series are fetched per data group |
+| Column names | Request `TP.FG.J0`, response contains `TP_FG_J0` |
+| International groups | Sorted alphabetically; Türkiye can be at position 470 |
 
-Python'da `"I".lower()` sonucu `"i"` döndürür, `"ı"` değil. Türkçe
-normalizasyon `text.py` içinde yapılır.
+In Python, `"I".lower()` returns `"i"` rather than `"ı"`, which silently
+breaks search on Turkish text. Normalisation lives in `text.py`.
 
-Yanıtlar UTF-8 kodlamalıdır. Türkçe karakterler bozuk görünüyorsa sebep
-terminal kod sayfasıdır.
+Responses are UTF-8. If Turkish characters look broken, the terminal
+code page is the cause.
 
-## Testler
+## Tests
 
 ```bash
-uv run pytest          # cevrimdisi, fixture'lara karsi
-uv run pytest -m live  # gercek API, EVDS_API_KEY gerekiyor
+uv run pytest          # offline, against recorded fixtures
+uv run pytest -m live  # hits the real API, needs EVDS_API_KEY
 ```
 
-`tests/fixtures/` altındaki dosyalar gerçek EVDS yanıtlarıdır.
+Fixtures under `tests/fixtures/` are real EVDS responses.
 
-## Lisans
+## License
 
 MIT

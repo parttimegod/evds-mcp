@@ -61,7 +61,7 @@ def log_fark(x: list[float]) -> list[float]:
 
 
 def donustur(x: list[float], donusum: str) -> list[float]:
-    if donusum == "seviye":
+    if donusum in ("seviye", "level"):
         return list(x)
     if donusum == "logd1":
         return log_fark(x)

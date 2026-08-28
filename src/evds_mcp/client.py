@@ -30,6 +30,16 @@ FREKANS = {
     "çeyreklik": 6,
     "6aylık": 7,
     "yıllık": 8,
+    # İngilizce karşılıklar. Araç adları İngilizce olduğu için
+    # parametre değerlerinin de İngilizce verilebilmesi gerekiyor.
+    "daily": 1,
+    "business": 2,
+    "weekly": 3,
+    "semimonthly": 4,
+    "monthly": 5,
+    "quarterly": 6,
+    "semiannual": 7,
+    "annual": 8,
 }
 
 

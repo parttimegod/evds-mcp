@@ -131,3 +131,10 @@ def test_canli_veri_cekiyor():
 
     assert len(seri.gozlemler) == 6
     assert seri.gozlemler[0].deger == 446.45
+
+
+def test_ingilizce_frekans_takma_adlari():
+    from evds_mcp.client import FREKANS
+
+    for tr, en in [("aylık", "monthly"), ("günlük", "daily"), ("yıllık", "annual")]:
+        assert FREKANS[tr] == FREKANS[en]

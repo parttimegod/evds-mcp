@@ -225,3 +225,8 @@ def test_zorlanan_donusum_duraganlastirmiyorsa_uyariyor():
     s = iliski(a, b, "A", "B", donusum_zorla="logd1")
 
     assert any("durağanlaştırmıyor" in u for u in s["uyarilar"])
+
+
+def test_level_seviye_ile_ayni():
+    x = beyaz_gurultu(30)
+    assert donustur(x, "level") == donustur(x, "seviye")
