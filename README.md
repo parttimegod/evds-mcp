@@ -46,37 +46,28 @@ Seviye korelasyonu hesaplayan araç bulunmuyor. İki seriyi
 karşılaştırmanın tek yolu `analyze_relationship` ve o durağanlık
 testini kendi içinde yapıyor.
 
-Ölçüm — USD/TRY ile TÜFE, aylık, 2010-01 – 2026-06:
+USD/TRY ~ TÜFE, aylık, 2010-01 – 2026-06:
 
-| Yöntem | Korelasyon |
-|---|---|
-| Seviye | 0.99 |
-| Otomatik dönüşüm (d2) | 0.15 |
-| Log farkı, 1 ay gecikmeli | 0.57 |
+| Yöntem | Korelasyon | Durum |
+|---|---|---|
+| Seviye | 0.99 | Sahte regresyon. ADF p = 1.00 ve 0.99, ikisi de durağan değil |
+| Otomatik dönüşüm (d2) | 0.15 | Aşırı farklanmış. USD/TRY I(1), TÜFE I(2) |
+| Log farkı + 1 ay gecikme | 0.57 | — |
 
-Seviye korelasyonu sahte: iki seri de durağan değil (ADF p = 1.00 ve
-0.99), ortak trend rakamı şişiriyor.
-
-d2 aşırı farklanmış: USD/TRY I(1), TÜFE I(2). Araç ikisini de ikinci
-dereceden farklayınca sinyal zayıflıyor.
-
-Üçüncüsü yüzde değişim üzerinden ve gecikmeli. Kur geçişkenliği tepesi
-1. ayda:
+Gecikme profili:
 
 ```
-gecikme 0 : +0.42
-gecikme 1 : +0.57
-gecikme 2 : +0.34
-gecikme 3 : +0.21
+0 ay  +0.42
+1 ay  +0.57
+2 ay  +0.34
+3 ay  +0.21
 ```
 
-`analyze_relationship` ham seviye rakamını yine döndürüyor, "kullanma"
-uyarısıyla birlikte. Dönüşüm `transform` ile elle verilebiliyor,
-gecikme `max_lag` ile taranıyor.
+`analyze_relationship` ham seviye rakamını "kullanma" uyarısıyla
+döndürür. `transform` dönüşümü elle seçer, `max_lag` gecikme tarar.
 
-TÜFE'nin bu dönemde I(2) çıkması Türkiye'ye özgü: ne bir fark ne log
-farkı durağanlaştırıyor. ADF çıktılarının tamamı [ASAMA2.md](ASAMA2.md)
-içinde.
+TÜFE bu dönemde I(2): ne birinci fark ne log farkı durağan. ADF
+çıktıları [ASAMA2.md](ASAMA2.md) içinde.
 
 ## Python'dan
 
@@ -92,37 +83,31 @@ with EVDS() as evds:
     evds.veri(["TP.TUKFIY2025.GENEL"], date(2025, 1, 1), date(2025, 5, 1))
 ```
 
-## EVDS API notları
+## EVDS API
 
-**Servis evds3'te.** Yaygın örnekler hâlâ
-`evds2.tcmb.gov.tr/service/evds/` gösteriyor; o adres web arayüzüne
-yönlendiriyor, JSON yerine HTML dönüyor. Doğrusu:
-`https://evds3.tcmb.gov.tr/igmevdsms-dis/`
+```
+endpoint    https://evds3.tcmb.gov.tr/igmevdsms-dis/
+kimlik      HTTP header: key: <anahtar>          (2024 öncesi URL'deydi)
+biçim       .../igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2020&type=json
+tarih       GG-AA-YYYY
+uçlar       datagroups/mode=0&code=&type=json    676 veri grubu
+            serieList/type=json&code=<grup>      gruptaki seriler
+```
 
-**Parametreler yola ekleniyor**, query string değil:
-`.../igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2020&type=json`
-`params=` kullanıldığında başa `?` geliyor ve servis anlamıyor.
+| Davranış | Sonuç |
+|---|---|
+| `evds2.tcmb.gov.tr/service/evds/` | Web arayüzüne yönlenir, HTML döner |
+| `params=` ile istek | Başa `?` eklenir, servis anlamaz |
+| Toplu seri ucu | Yok. Seriler grup kodu ile çekilir |
+| İstenen `TP.FG.J0` | Yanıt sütunu `TP_FG_J0` |
+| Geçersiz tarih formatı | Hata yok, farklı aralık döner |
+| Uluslararası grup sıralaması | Alfabetik; Türkiye 470. sırada kalabilir |
 
-**Toplu seri ucu yok.** 676 veri grubu var, seriler ancak grup kodu
-verilerek çekiliyor. Arama bu yüzden iki seviyeli: önce grup, sonra
-grup içinde seri.
+Python tarafında `"I".lower()` → `"i"` (`"ı"` değil), `"İ".lower()` →
+`i` + U+0307. Arama anahtarı üretimi `text.py` içinde.
 
-**Sütun adlarında nokta yerine alt çizgi.** İstek `TP.FG.J0`, yanıt
-`TP_FG_J0`.
-
-**Tarih formatı `GG-AA-YYYY`.** ISO değil. Yanlış format hata
-döndürmüyor, sessizce başka bir aralık dönüyor.
-
-**Anahtar 2024'ten beri HTTP header'ında**, URL parametresinde değil.
-
-**Türkçe küçük harf.** `"I".lower()` → `"i"`, `"ı"` değil. Aramada
-kullanılırsa hata alınmıyor, sonuç dönmüyor. `text.py` bunun için.
-
-**Uluslararası gruplar alfabetik sıralı.** "politika faizi" araması
-Türkiye'yi 470. sıraya düşürüyordu; sıralamada Türkiye eşitlik bozucu.
-
-**Türkçe karakterler bozuk görünebilir ama değil.** Yanıtlar geçerli
-UTF-8; sorun Windows konsolunun kod sayfası.
+Yanıtlar UTF-8. Türkçe karakterler bozuk görünüyorsa sebep Windows
+konsolunun kod sayfası.
 
 ## Testler
 
