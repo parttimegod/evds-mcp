@@ -1,58 +1,117 @@
 # evds-mcp
 
-TCMB EVDS verisi için MCP sunucusu. Dil modeli seri arayabiliyor, veri
-çekebiliyor ve iki seri arasındaki ilişkiyi durağanlık testinden
-geçirerek analiz edebiliyor.
+TCMB EVDS verilerine erişim sağlayan MCP sunucusu. Claude ve diğer MCP
+destekli istemcilerden Türkiye makroekonomik verilerini sorgulayabilir,
+durağanlık testi ve ilişki analizi yapabilirsiniz.
+
+## Özellikler
+
+- Kavram bazlı seri arama (676 veri grubu, Türkçe ve İngilizce)
+- Tek veya çoklu seri verisi çekme
+- ADF durağanlık testi, bütünleşme derecesi tespiti
+- İki seri arası ilişki analizi: otomatik dönüşüm, gecikme taraması,
+  Engle-Granger eşbütünleşme testi
+- Türkçe karakter normalizasyonu
+
+## Gereksinimler
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- EVDS API anahtarı (ücretsiz)
 
 ## Kurulum
 
-```
+```bash
 git clone https://github.com/parttimegod/evds-mcp
 cd evds-mcp
 uv sync
 ```
 
-API anahtarı [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr) üzerinden
-ücretsiz alınıyor: profil sayfasının altında "API Anahtarı Kopyala".
+API anahtarını almak için [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr)
+adresine kaydolun. Profil sayfasının altındaki "API Anahtarı Kopyala"
+butonunu kullanın.
+
+## Yapılandırma
+
+MCP istemcinizin yapılandırma dosyasına ekleyin:
 
 ```json
 {
   "mcpServers": {
     "evds": {
       "command": "uv",
-      "args": ["--directory", "/evds-mcp/dizininin/yolu", "run", "evds-mcp"],
-      "env": { "EVDS_API_KEY": "anahtarin" }
+      "args": ["--directory", "/path/to/evds-mcp", "run", "evds-mcp"],
+      "env": { "EVDS_API_KEY": "your-api-key" }
     }
   }
 }
 ```
 
+Claude Desktop için `claude_desktop_config.json`, Claude Code için
+`~/.claude.json` dosyasını düzenleyin.
+
+## Kullanım
+
+Yapılandırdıktan sonra doğal dille sorabilirsiniz:
+
+```
+2020'den beri TÜFE ve politika faizini getir
+Konut fiyat endeksi hangi tarihten beri yayınlanıyor?
+Dolar kuru ile enflasyon arasında ilişki var mı?
+```
+
 ## Araçlar
 
-| Araç | Ne yapar |
-|---|---|
-| `search_series` | Kavramdan seri kodu bulur. Künyede ad, frekans, kaynak ve kapsam tarihleri döner. |
-| `summarize_series` | Gözlem sayısı, eksik veri, min, max, ortalama, toplam değişim. Ham veri döndürmez. |
-| `get_series` | Veri. Varsayılan: özet + son 24 gözlem. Tamamı için `full=True`. Birden fazla kod alır. |
-| `test_stationarity` | ADF'yi seviyede, log farkında ve ardışık farklarda çalıştırır. I(d) derecesini ve önerilen dönüşümü döndürür. |
-| `analyze_relationship` | İki seri arası ilişki. Durağanlık testi yapar, dönüşümü uygular, hangisini uyguladığını yazar. İkisi de I(1) ise eşbütünleşme testi. `max_lag`, `transform`. |
+### `search_series(query, limit=10)`
 
-`get_series` varsayılanı dar: 2003'ten beri aylık bir seri 280 gözlem
-eder, birkaç seri istendiğinde bağlam dolar.
+Kavramdan seri kodu bulur. Seri kodları (`TP.FG.J0` gibi) ezberlenmediği
+için arama buradan başlar.
 
-## Ham korelasyon aracı yok
+Dönen alanlar: kod, ad, İngilizce ad, veri grubu, frekans, kaynak,
+kapsam tarihleri.
 
-Seviye korelasyonu hesaplayan araç bulunmuyor. İki seriyi
-karşılaştırmanın tek yolu `analyze_relationship` ve o durağanlık
-testini kendi içinde yapıyor.
+### `summarize_series(code, start, end, frequency="aylık")`
 
-USD/TRY ~ TÜFE, aylık, 2010-01 – 2026-06:
+Seriyi ham veri döndürmeden özetler: gözlem sayısı, eksik veri, ilk ve
+son değer, min, max, ortalama, toplam değişim.
 
-| Yöntem | Korelasyon | Durum |
+### `get_series(codes, start, end, frequency="aylık", full=False)`
+
+Seri verisini getirir. Birden fazla kod verilebilir, aynı tarih
+ızgarasına hizalı döner.
+
+Varsayılan olarak özet ve son 24 gözlem döner. 2003'ten beri aylık bir
+seri 280 gözlem içerir ve birkaç seri birlikte istendiğinde bağlam
+penceresini doldurur. Tüm gözlemler için `full=True` kullanın.
+
+### `test_stationarity(code, start, end, frequency="aylık")`
+
+ADF testini seviyede, log farkında ve ardışık farklarda çalıştırır.
+Bütünleşme derecesini I(d) ve önerilen dönüşümü döndürür.
+
+### `analyze_relationship(codes, start, end, frequency="aylık", transform=None, max_lag=0)`
+
+İki seri arasındaki ilişkiyi analiz eder. Önce her iki seriyi durağanlık
+testinden geçirir, gereken dönüşümü uygular ve hangi dönüşümü
+uyguladığını çıktıda belirtir. Her iki seri de I(1) ise Engle-Granger
+eşbütünleşme testi çalıştırır.
+
+- `transform` — dönüşümü elle seçer (`logd1`, `d1`, `d2`, `seviye`)
+- `max_lag` — gecikmeli ilişki tarar, en güçlü gecikmeyi bildirir
+
+## Neden ham korelasyon aracı yok
+
+Seviye korelasyonu hesaplayan ayrı bir araç bulunmuyor. Makroekonomik
+seriler genellikle durağan değildir ve seviye korelasyonu ortak trend
+nedeniyle yanıltıcı sonuç verir.
+
+USD/TRY ve TÜFE, aylık, 2010-01 – 2026-06:
+
+| Yöntem | Korelasyon | Not |
 |---|---|---|
-| Seviye | 0.99 | Sahte regresyon. ADF p = 1.00 ve 0.99, ikisi de durağan değil |
-| Otomatik dönüşüm (d2) | 0.15 | Aşırı farklanmış. USD/TRY I(1), TÜFE I(2) |
-| Log farkı + 1 ay gecikme | 0.57 | — |
+| Seviye | 0.99 | Sahte regresyon (ADF p = 1.00 ve 0.99) |
+| Otomatik dönüşüm (d2) | 0.15 | Aşırı farklanmış: USD/TRY I(1), TÜFE I(2) |
+| Log farkı + 1 ay gecikme | 0.57 | |
 
 Gecikme profili:
 
@@ -63,13 +122,14 @@ Gecikme profili:
 3 ay  +0.21
 ```
 
-`analyze_relationship` ham seviye rakamını "kullanma" uyarısıyla
-döndürür. `transform` dönüşümü elle seçer, `max_lag` gecikme tarar.
+`analyze_relationship` seviye korelasyonunu yine döndürür, uyarı
+etiketiyle birlikte.
 
-TÜFE bu dönemde I(2): ne birinci fark ne log farkı durağan. ADF
-çıktıları [ASAMA2.md](ASAMA2.md) içinde.
+TÜFE bu dönemde I(2)'dir; ne birinci fark ne de log farkı seriyi
+durağanlaştırır. ADF çıktılarının tamamı [ASAMA2.md](ASAMA2.md)
+dosyasındadır.
 
-## Python'dan
+## Python API
 
 ```python
 from datetime import date
@@ -78,46 +138,52 @@ from evds_mcp.catalog import Katalog
 
 with EVDS() as evds:
     k = Katalog(evds)
-    k.grup_ara("enflasyon")                    # bie_tukfiy2025
-    k.seri_ara("genel", "bie_tukfiy2025")      # TP.TUKFIY2025.GENEL
-    evds.veri(["TP.TUKFIY2025.GENEL"], date(2025, 1, 1), date(2025, 5, 1))
+
+    k.grup_ara("enflasyon")                # bie_tukfiy2025
+    k.seri_ara("genel", "bie_tukfiy2025")  # TP.TUKFIY2025.GENEL
+
+    seriler = evds.veri(
+        ["TP.TUKFIY2025.GENEL"],
+        date(2025, 1, 1),
+        date(2025, 5, 1),
+    )
 ```
 
-## EVDS API
+## EVDS API notları
+
+Servis endpoint'i:
 
 ```
-endpoint    https://evds3.tcmb.gov.tr/igmevdsms-dis/
-kimlik      HTTP header: key: <anahtar>          (2024 öncesi URL'deydi)
-biçim       .../igmevdsms-dis/series=TP.FG.J0&startDate=01-01-2020&type=json
-tarih       GG-AA-YYYY
-uçlar       datagroups/mode=0&code=&type=json    676 veri grubu
-            serieList/type=json&code=<grup>      gruptaki seriler
+https://evds3.tcmb.gov.tr/igmevdsms-dis/
 ```
 
-| Davranış | Sonuç |
+Yaygın örneklerde geçen `evds2.tcmb.gov.tr/service/evds/` adresi web
+arayüzüne yönlendirir ve HTML döndürür.
+
+| Konu | Durum |
 |---|---|
-| `evds2.tcmb.gov.tr/service/evds/` | Web arayüzüne yönlenir, HTML döner |
-| `params=` ile istek | Başa `?` eklenir, servis anlamaz |
+| Kimlik doğrulama | HTTP header (`key`). 2024 öncesinde URL parametresiydi |
+| Parametre biçimi | Yola eklenir: `.../igmevdsms-dis/series=TP.FG.J0&startDate=...` |
+| `params=` kullanımı | Başa `?` ekler, servis kabul etmez |
+| Tarih formatı | `GG-AA-YYYY`. Yanlış format hata vermez, farklı aralık döner |
 | Toplu seri ucu | Yok. Seriler grup kodu ile çekilir |
-| İstenen `TP.FG.J0` | Yanıt sütunu `TP_FG_J0` |
-| Geçersiz tarih formatı | Hata yok, farklı aralık döner |
-| Uluslararası grup sıralaması | Alfabetik; Türkiye 470. sırada kalabilir |
+| Sütun adları | İstek `TP.FG.J0`, yanıt `TP_FG_J0` |
+| Uluslararası gruplar | Alfabetik sıralı, Türkiye 470. sırada olabilir |
 
-Python tarafında `"I".lower()` → `"i"` (`"ı"` değil), `"İ".lower()` →
-`i` + U+0307. Arama anahtarı üretimi `text.py` içinde.
+Python'da `"I".lower()` sonucu `"i"` döndürür, `"ı"` değil. Türkçe
+normalizasyon `text.py` içinde yapılır.
 
-Yanıtlar UTF-8. Türkçe karakterler bozuk görünüyorsa sebep Windows
-konsolunun kod sayfası.
+Yanıtlar UTF-8 kodlamalıdır. Türkçe karakterler bozuk görünüyorsa sebep
+terminal kod sayfasıdır.
 
 ## Testler
 
-```
+```bash
 uv run pytest          # cevrimdisi, fixture'lara karsi
 uv run pytest -m live  # gercek API, EVDS_API_KEY gerekiyor
 ```
 
-`tests/fixtures/` gerçek EVDS yanıtları. Servis şekil değiştirirse
-önce bu testler kırılır.
+`tests/fixtures/` altındaki dosyalar gerçek EVDS yanıtlarıdır.
 
 ## Lisans
 
