@@ -1,5 +1,9 @@
 # evds-mcp
 
+[![test](https://github.com/parttimegod/evds-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/parttimegod/evds-mcp/actions/workflows/test.yml)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 MCP server for the Central Bank of Türkiye's statistical database (EVDS).
 Lets Claude and other MCP clients search, fetch and analyse Turkish
 macroeconomic time series, with stationarity testing built into the
@@ -59,6 +63,58 @@ Get CPI and the policy rate since 2020
 How far back does the house price index go?
 Is there a relationship between the dollar rate and inflation?
 ```
+
+The last question produces the following. First the model looks up codes:
+
+```jsonc
+// search_series("dollar exchange rate")
+{
+  "seriler": [
+    {
+      "kod": "TP.DK.USD.A.YTL",
+      "ad_eng": "(USD) US Dollar (Buying)",
+      "grup": "bie_dkdovytl",
+      "frekans": "GÜNLÜK",
+      "kapsam": "02-01-1950 - 27-08-2026"
+    }
+  ]
+}
+```
+
+Then analyses the relationship. Note that the level correlation is
+returned but flagged, and the strongest relationship is not
+contemporaneous:
+
+```jsonc
+// analyze_relationship(["TP.DK.USD.A.YTL", "TP.TUKFIY2025.GENEL"],
+//                      "2010-01-01", "2026-06-01",
+//                      transform="logd1", max_lag=6)
+{
+  "donusum": "logd1",
+  "korelasyon": 0.421,
+  "gozlem": 197,
+  "gecikme": {
+    "profil": { "0": 0.421, "1": 0.5685, "2": 0.3359, "3": 0.2079 },
+    "tepe_gecikme": 1,
+    "tepe_korelasyon": 0.5685
+  },
+  "ham_seviye_korelasyonu": {
+    "deger": 0.9856,
+    "uyari": "Bu rakamı kullanma. Seriler durağan olmadığı için sahte
+              regresyon; ortak trend yüzünden şişkin çıkıyor."
+  },
+  "uyarilar": [
+    "Bütünleşme dereceleri farklı: TP.DK.USD.A.YTL I(1),
+     TP.TUKFIY2025.GENEL I(2).",
+    "TP.TUKFIY2025.GENEL: istenen dönüşüm (logd1) bu seriyi
+     durağanlaştırmıyor (ADF p=0.3512). Sonuç şişkin olabilir.",
+    "En güçlü ilişki 1. gecikmede (0.5685), eşanlı değil (0.421)."
+  ],
+  "yorum": "Bu bir korelasyondur, nedensellik değildir."
+}
+```
+
+Tool output messages are in Turkish.
 
 ## Tools
 

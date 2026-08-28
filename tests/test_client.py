@@ -114,7 +114,8 @@ def test_bos_items_anlamli_hata():
 
 
 def test_serielist_fixture_turkce_bozulmamis():
-    seriler = json.loads((FIXTURES / "serielist_bie_tufe1.json").read_text(encoding="utf-8"))
+    yol = FIXTURES / "serielist_bie_tufe1.json"
+    seriler = json.loads(yol.read_text(encoding="utf-8"))
     adlar = " ".join(s["SERIE_NAME"] for s in seriler)
 
     assert "�" not in adlar  # bozuk karakter yok

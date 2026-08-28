@@ -125,7 +125,7 @@ def korelasyon(a: list[float], b: list[float]) -> float:
     n = min(len(a), len(b))
     a, b = a[-n:], b[-n:]
     ma, mb = statistics.fmean(a), statistics.fmean(b)
-    pay = sum((i - ma) * (j - mb) for i, j in zip(a, b))
+    pay = sum((i - ma) * (j - mb) for i, j in zip(a, b, strict=True))
     payda = math.sqrt(
         sum((i - ma) ** 2 for i in a) * sum((j - mb) ** 2 for j in b)
     )
@@ -209,7 +209,7 @@ def iliski(
         donusum = donusum_zorla
         # Zorlanan dönüşüm durağanlaştırmıyorsa sustuğumuz için değil,
         # söylediğimiz için sorumluluk kullanıcıda olsun.
-        for ad, seri_, d in ((ad_a, a, da), (ad_b, b, db)):
+        for ad, d in ((ad_a, da), (ad_b, db)):
             p = d.p_degerleri.get(donusum)
             if p is not None and p >= ALFA:
                 uyarilar.append(

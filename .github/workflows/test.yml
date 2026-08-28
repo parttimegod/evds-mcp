@@ -17,6 +17,8 @@ jobs:
 
       - run: uv sync --all-extras
 
+      - run: uv run ruff check .
+
       # Testler ağa çıkmıyor, API anahtarı gerekmiyor. Canlı test
       # -m 'not live' ile zaten dışarıda.
       - run: uv run pytest -q

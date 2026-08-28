@@ -67,7 +67,11 @@ def _tarih_oku(metin: str, alan: str) -> date:
 def _ozet(gozlemler) -> dict:
     dolu = [g.deger for g in gozlemler if g.deger is not None]
     if not dolu:
-        return {"gozlem": len(gozlemler), "eksik": len(gozlemler), "not": "Hiç dolu gözlem yok."}
+        return {
+            "gozlem": len(gozlemler),
+            "eksik": len(gozlemler),
+            "not": "Hiç dolu gözlem yok.",
+        }
 
     ilk, son = dolu[0], dolu[-1]
     ozet = {

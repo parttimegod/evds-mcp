@@ -206,3 +206,17 @@ def test_turkce_ekler_onek_eslesmesiyle_yakalaniyor():
 def test_kisa_kokler_onek_eslesmesine_girmiyor():
     # "kur" kökü "kurumsal", "kuruluş" gibi kelimeleri yakalamamalı.
     assert "doviz kurlari" not in _genislet("kurumsal")
+
+
+@pytest.mark.parametrize(
+    "sorgu, beklenen",
+    [
+        ("dollar exchange rate", "bie_dkdovytl"),
+        ("unemployment", "bie_yisgucu2"),
+        ("policy rate", "bie_bispolfaiz"),
+    ],
+)
+def test_ingilizce_sorgular(gruplar, sorgu, beklenen):
+    # Grup adlarının İngilizcesi de aranıyor ama kullanıcının kelimesi
+    # tutmayabiliyor: "dollar" arayan "Exchange Rates"i bulamıyordu.
+    assert beklenen in [g.kod for g in _sirala(gruplar, sorgu, 3)]

@@ -71,6 +71,17 @@ ESANLAMLI = {
     "euro": ["doviz kurlari"],
     "avro": ["doviz kurlari"],
     "kur": ["doviz kurlari"],
+    # Grup adlarinin Ingilizcesi de aranıyor ama kullanicinin kelimesi
+    # yine tutmuyor: "dollar" arayan "Exchange Rates"i bulamiyor.
+    "dollar": ["exchange rates", "doviz kurlari"],
+    "inflation": ["consumer price index", "tuketici fiyat endeksi"],
+    "cpi": ["consumer price index"],
+    "unemployment": ["labour force", "labor force", "isgucu"],
+    "employment": ["labour force", "labor force", "isgucu"],
+    "growth": ["gross domestic product", "hasila"],
+    "gdp": ["gross domestic product", "hasila"],
+    "policy rate": ["policy interest rate"],
+    "current account": ["balance of payments", "odemeler dengesi"],
 }
 
 # Önek eşleşmesi bunun altındaki kelimelerde yapılmıyor; "kur" gibi kısa
