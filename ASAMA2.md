@@ -142,7 +142,7 @@ TP.TUKFIY2025.GENEL: istenen dönüşüm (logd1) bu seriyi durağanlaştırmıyo
 Susup uygulamak da, reddetmek de yanlış olurdu. Doğrusu uygulayıp
 sorumluluğu görünür kılmak.
 
-### Aynı sorunun üç cevabı
+### USD/TRY ~ TÜFE: aynı sorunun üç cevabı
 
 ```
 ham seviye korelasyonu     0.9856   <- model bunu söylerdi
@@ -150,7 +150,7 @@ otomatik dönüşüm (d2)      0.1546   <- aşırı farklanmış
 logd1, gecikme 1           0.5685   <- doğru cevap
 ```
 
-Üçü de aynı veriden çıkıyor. Aradaki farkı bilmek ekonometri bilmek
-demek — aracın varlık sebebi bu.
+Üçü de aynı veriden çıkıyor. Hangisinin doğru olduğu veriye bakarak
+değil, testleri çalıştırarak belli oluyor.
 
 Deney betikleri repoda yok, tek seferlikti; sayılar yukarıda.

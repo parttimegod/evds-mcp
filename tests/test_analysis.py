@@ -148,11 +148,8 @@ def test_iki_i1_serisinde_esbutunlesme_test_ediliyor():
 
 
 def test_sahte_korelasyon_dusuyor():
-    """Projenin varlık sebebi.
-
-    İki bağımsız rassal yürüyüş seviyede yüksek korelasyon gösterebilir;
-    durağanlaştırıldıktan sonra göstermemeli.
-    """
+    """İki bağımsız rassal yürüyüş seviyede yüksek korelasyon
+    gösterebilir; durağanlaştırıldıktan sonra göstermemeli."""
     a = rassal_yuruyus(n=300, tohum=11)
     b = rassal_yuruyus(n=300, tohum=12)
     s = iliski(a, b, "A", "B")
