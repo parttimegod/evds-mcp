@@ -18,33 +18,16 @@ relationship analysis.
   Engle-Granger cointegration testing
 - Turkish text normalisation for search
 
-## Requirements
-
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/)
-- An EVDS API key (free)
-
 ## Installation
 
-```bash
-git clone https://github.com/parttimegod/evds-mcp
-cd evds-mcp
-uv sync
-```
-
-Register at [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr) to get an API
-key. It is at the bottom of your profile page, under "Copy API Key".
-
-## Configuration
-
-Add the server to your MCP client config:
+No install needed. Point your MCP client at it:
 
 ```json
 {
   "mcpServers": {
     "evds": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/evds-mcp", "run", "evds-mcp"],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/parttimegod/evds-mcp", "evds-mcp"],
       "env": { "EVDS_API_KEY": "your-api-key" }
     }
   }
@@ -52,7 +35,31 @@ Add the server to your MCP client config:
 ```
 
 Claude Desktop uses `claude_desktop_config.json`; Claude Code uses
-`~/.claude.json`.
+`~/.claude.json`. No clone, no path, no virtualenv — `uvx` fetches and
+runs it.
+
+Get a free API key at [evds3.tcmb.gov.tr](https://evds3.tcmb.gov.tr):
+register, then "Copy API Key" at the bottom of your profile page.
+
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
+
+<details>
+<summary>Working on the code instead?</summary>
+
+```bash
+git clone https://github.com/parttimegod/evds-mcp
+cd evds-mcp
+uv sync
+uv run pytest
+```
+
+Then point the config at your checkout:
+
+```json
+"args": ["--directory", "/path/to/evds-mcp", "run", "evds-mcp"]
+```
+
+</details>
 
 ## Usage
 
