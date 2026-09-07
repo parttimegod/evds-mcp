@@ -191,7 +191,12 @@ class Katalog:
         kendi ekran sırasına düş. Baslık seriler orada zaten önde.
         """
         seriler = self.grup_serileri(grup_kodu)
-        a = _genislet(arama_anahtari(sorgu)) if sorgu else ""
+        # Eşanlamlı sözlüğü BURADA kullanılmıyor, bilerek. Sözlük doğru
+        # grubu bulmak için var; grup zaten bulunduktan sonra sorguyu
+        # genişletmek zarar veriyor. "işsizlik oranı" sorgusu "istihdam"
+        # ile genişleyince grup içinde "İstihdam oranı"nı öne itip asıl
+        # aranan "İşsizlik oranı"nı geriye atıyordu.
+        a = arama_anahtari(sorgu) if sorgu else ""
         seriler.sort(
             key=lambda s: (
                 -_puan(a, s._aranacak) if a else 0,

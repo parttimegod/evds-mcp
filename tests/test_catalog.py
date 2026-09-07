@@ -220,3 +220,26 @@ def test_ingilizce_sorgular(gruplar, sorgu, beklenen):
     # Grup adlarının İngilizcesi de aranıyor ama kullanıcının kelimesi
     # tutmayabiliyor: "dollar" arayan "Exchange Rates"i bulamıyordu.
     assert beklenen in [g.kod for g in _sirala(gruplar, sorgu, 3)]
+
+
+def test_grup_icinde_esanlamli_kullanilmiyor():
+    """Sözlük grup bulmak için; grup içinde sorguyu bozuyor.
+
+    "işsizlik oranı" -> "istihdam" ile genişleyince gruptaki
+    "İstihdam oranı" öne çıkıp "İşsizlik oranı"nı geriye atıyordu.
+    """
+    seriler = [
+        _seri_yap({"SERIE_CODE": "G6", "SERIE_NAME": "6.İşgücüne katılma oranı (%)"}),
+        _seri_yap({"SERIE_CODE": "G7", "SERIE_NAME": "7.İstihdam oranı (%)"}),
+        _seri_yap({"SERIE_CODE": "G8", "SERIE_NAME": "8.İşsizlik oranı (%)"}),
+    ]
+
+    class TekGrup(SahteEVDS):
+        def grup_serileri(self, grup_kodu):
+            return [
+                {"SERIE_CODE": s.kod, "SERIE_NAME": s.ad, "DATAGROUP_CODE": "bie_x"}
+                for s in seriler
+            ]
+
+    sonuc = Katalog(TekGrup()).seri_ara("işsizlik oranı", "bie_x", limit=3)
+    assert sonuc[0].kod == "G8"
