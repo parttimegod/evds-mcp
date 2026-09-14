@@ -200,9 +200,10 @@ differencing makes it stationary. Full ADF output is in
 ## Optional PostgreSQL storage
 
 `evds_mcp.depo` is an optional storage layer for series metadata and
-observations. It exists for two reasons: to avoid re-fetching a series
-that is already stored, and to query history with SQL, which the EVDS
-client itself does not offer (it only returns one request's response).
+observations. It exists for three reasons: to avoid re-fetching a series
+that is already stored, to query history with SQL (which the EVDS client
+itself does not offer — it only returns one request's response), and to
+keep provenance: which fetch wrote which value, and when.
 
 It is not installed by default. Install the extra:
 
@@ -215,15 +216,21 @@ uv sync --extra depo
 raises a clear error naming the extra if it is missing.
 
 ```python
+from datetime import date
 from evds_mcp.depo import Depo
 
 depo = Depo("host=127.0.0.1 port=5432 dbname=evds user=postgres")
 depo.kur()  # applies the schema, safe to call again later
 
-depo.seri_yaz(kunye)              # upsert one series' metadata
-depo.gozlem_yaz(kod, gozlemler)   # bulk upsert observations
-depo.son_gozlemler(kod, 12)       # last 12 observations, newest first
-depo.gecikmeli_oku(kod, 1)        # each observation with the prior period's value
+depo.seri_yaz(kunye)                              # upsert one series' metadata
+depo.gozlem_yaz(kod, date(2020, 1, 1), date(2020, 12, 31), gozlemler)
+                                                   # bulk upsert observations,
+                                                   # records a cekim audit row
+depo.son_gozlemler(kod, 12)                       # last 12 observations, newest first
+depo.cekimler_oku(kod)                            # fetch history for this series
+depo.gecikmeli_oku(kod, 1)                        # row-wise lag (fast, gap-blind)
+depo.takvim_gecikmeli_oku(kod, 1)                 # calendar-aware lag (correct on gaps)
+depo.salt_okunur_sorgu("SELECT ...")              # guarded read-only SQL, see below
 ```
 
 ### Schema
@@ -234,23 +241,53 @@ CREATE TABLE seri (
     frekans SMALLINT, kaynak TEXT, baslangic DATE, bitis DATE,
     guncelleme TIMESTAMPTZ
 );
-CREATE TABLE gozlem (
-    kod TEXT REFERENCES seri(kod) ON DELETE CASCADE,
-    tarih DATE NOT NULL,
-    deger DOUBLE PRECISION,
+CREATE TABLE cekim (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    kod TEXT NOT NULL REFERENCES seri(kod) ON DELETE CASCADE,
+    istenen_baslangic DATE NOT NULL,
+    istenen_bitis DATE NOT NULL,
     cekilme TIMESTAMPTZ NOT NULL DEFAULT now(),
+    gozlem_sayisi INTEGER NOT NULL,
+    null_sayisi INTEGER NOT NULL,
+    CHECK (istenen_baslangic <= istenen_bitis)
+);
+CREATE INDEX ON cekim (kod, istenen_baslangic, istenen_bitis);
+CREATE TABLE gozlem (
+    kod TEXT NOT NULL REFERENCES seri(kod) ON DELETE CASCADE,
+    tarih DATE NOT NULL,
+    ham_donem TEXT NOT NULL,
+    deger NUMERIC,
+    cekim_id BIGINT REFERENCES cekim(id) ON DELETE SET NULL,
     PRIMARY KEY (kod, tarih)
 );
 CREATE INDEX ON gozlem (kod, tarih DESC);
 ```
 
-Four decisions in this schema are worth explaining, since they are not
-obvious from the DDL alone:
+Decisions in this schema worth explaining, since they are not obvious
+from the DDL alone:
 
+- **`deger` is `NUMERIC`, not `DOUBLE PRECISION`.** Stored values are
+  price indices and exchange rates. Binary floating point makes exact
+  comparison and summation lossy (`0.1 + 0.2 != 0.3` in `float`); EVDS
+  already hands back a decimal string, and `NUMERIC` stores exactly what
+  that string means, with no double-rounding.
 - **`deger` is nullable.** A missing observation is not zero. EVDS
   returns null for a period a series was not published in yet. Storing
   0 would silently corrupt every mean and every difference computed
   over the series.
+- **`ham_donem` keeps EVDS's raw period label** (e.g. `"2020-3"`)
+  alongside the parsed `tarih`. EVDS's period strings are inconsistent
+  across frequencies, and only the monthly format is live-verified (see
+  `SONRA.md`). If the parser is ever wrong for some frequency, the
+  original string is still there to debug from — the bug becomes
+  visible instead of a silently wrong date.
+- **`cekim` is a fetch-audit table**, one row per call to `gozlem_yaz`:
+  which series, what range was *requested* (not just what came back —
+  those can differ when EVDS hasn't published part of the range yet),
+  when, how many observations, how many were null. `gozlem.cekim_id`
+  points at the row that last wrote that value. For revised macro data —
+  TCMB and TÜİK both revise published periods — this is the only way to
+  answer "where did this number come from and when," not a luxury.
 - **The primary key is `(kod, tarih)`**, the natural key of an
   observation. It makes re-fetching a series idempotent through
   `ON CONFLICT ... DO UPDATE`, and it makes a duplicate observation
@@ -264,11 +301,10 @@ obvious from the DDL alone:
   observation. A separate table per frequency would turn a query
   across series of different frequencies into a union.
 
-### The lag query
+### The lag query, and the trap in the obvious version
 
-`gecikmeli_oku(kod, gecikme)` is the point of this layer: it returns
-each observation next to the value some number of periods earlier,
-using a window function instead of a self-join.
+The obvious way to compute "the value N periods ago" in SQL is a window
+function over the stored rows:
 
 ```sql
 SELECT tarih, deger,
@@ -278,8 +314,86 @@ WHERE kod = %s
 ORDER BY tarih
 ```
 
-The first `gecikme` rows of a series have no prior value; `LAG` returns
-`NULL` for them rather than requiring special-case handling in Python.
+This is `gecikmeli_oku(kod, gecikme)`, and it is genuinely correct for a
+series with no gaps. But `LAG(deger, n)` returns the value from the
+*n-th previous stored row*, not from *n calendar periods ago*. If a
+period is missing from the table — no row at all, which is different
+from a row with a `NULL` value — `LAG` skips straight past it without
+noticing. A 1-period lag silently becomes a 2-period lag, mislabeled as
+1. On a macro series with any gaps (a period EVDS hadn't published yet,
+a partial re-fetch, a range that was never pulled), this produces a
+lag correlation that is simply wrong, and nothing about the query
+signals that it happened.
+
+`takvim_gecikmeli_oku(kod, gecikme)` fixes this by building the
+calendar explicitly instead of trusting row adjacency:
+
+```sql
+WITH takvim AS (
+    SELECT gs::date AS tarih
+    FROM generate_series(
+        (SELECT min(tarih) FROM gozlem WHERE kod = %(kod)s),
+        (SELECT max(tarih) FROM gozlem WHERE kod = %(kod)s),
+        %(aralik)s::interval
+    ) AS gs
+),
+izgara AS (
+    SELECT t.tarih, g.deger
+    FROM takvim t
+    LEFT JOIN gozlem g ON g.kod = %(kod)s AND g.tarih = t.tarih
+)
+SELECT tarih, deger,
+       LAG(deger, %(gecikme)s) OVER (ORDER BY tarih) AS onceki
+FROM izgara
+ORDER BY tarih
+```
+
+`generate_series` produces every expected calendar date between the
+series' first and last locally stored observation, stepped by the
+interval implied by the series' frequency (`seri.frekans`); the
+`LEFT JOIN` turns an absent period into an explicit `NULL` row instead
+of a missing one. `LAG` over *that* grid is calendar-correct by
+construction: the n-th previous row is, by construction, n calendar
+periods back, gap or no gap.
+
+The interval is derived from `client.FREKANS`'s code, not guessed:
+daily → 1 day, monthly → 1 month, quarterly → 3 months, semiannual → 6
+months, annual → 1 year. Three frequencies are deliberately **not**
+mapped, and `takvim_gecikmeli_oku` raises a clear `DepoHatasi` for them
+rather than emitting a grid that looks right and isn't:
+
+- **business day (`işgünü`)** — public holidays vary year to year, so
+  there is no fixed step size to generate.
+- **weekly (`haftalık`)** — EVDS often anchors this to one weekday (its
+  own frequency text includes it, e.g. `"HAFTALIK(CUMA)"`), but if that
+  weekday is a holiday the observation can shift to another day. A
+  fixed 7-day step would misalign right when it matters most.
+- **semimonthly (`ayda2`)** — which two days of the month EVDS uses for
+  this frequency is not documented or live-verified (see `SONRA.md`:
+  only frequency 5, monthly, has been confirmed against the live API).
+  Guessing the anchor days risks exactly the silently-wrong grid this
+  method exists to avoid.
+
+For all three, use `gecikmeli_oku` and treat its row-wise semantics as
+what they are, or supply your own calendar. Both `gecikmeli_oku` and
+`takvim_gecikmeli_oku` are legitimate — the original bug was having only
+the row-wise version and not documenting which one you were getting.
+
+`examples/sql/veri_kalitesi.sql` shows the same trap and fix directly in
+SQL, including a `NULLIF(abs(...), 0)` guard so a lagged percentage
+change never raises a division-by-zero instead of returning `NULL`; and
+`examples/sql/iki_seri_karsilastirma.sql` shows comparing two series
+only on the dates both have a value.
+
+### Read-only SQL
+
+`salt_okunur_sorgu(sql, limit=200, zaman_asimi_ms=5000)` runs one
+`SELECT`, `WITH`, `SHOW`, or `EXPLAIN` statement and returns rows as
+dicts. It rejects semicolon-separated statements, runs under
+`transaction_read_only`, applies a statement timeout, and uses prepared
+execution — which, combined with the single-statement check, blocks a
+`COMMIT`/`SET`-style escape chain. This is read-only execution, not a
+security sandbox: only pass it SQL you trust.
 
 ## Python API
 
