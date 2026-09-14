@@ -20,6 +20,11 @@ dependencies = [
     "statsmodels>=0.14.6",
 ]
 
+[project.optional-dependencies]
+depo = [
+    "psycopg[binary]>=3.2",
+]
+
 [project.urls]
 Repository = "https://github.com/parttimegod/evds-mcp"
 Issues = "https://github.com/parttimegod/evds-mcp/issues"
@@ -38,8 +43,11 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-markers = ["live: gercek EVDS API'sine baglanir, varsayilan olarak atlanir"]
-addopts = "-m 'not live'"
+markers = [
+    "live: gercek EVDS API'sine baglanir, varsayilan olarak atlanir",
+    "depo: gercek PostgreSQL veritabanina baglanir, varsayilan olarak atlanir",
+]
+addopts = "-m 'not live and not depo'"
 
 [tool.ruff]
 line-length = 90

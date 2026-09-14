@@ -197,6 +197,90 @@ Turkish CPI is I(2) over this period: neither first differencing nor log
 differencing makes it stationary. Full ADF output is in
 [ASAMA2.md](ASAMA2.md) (Turkish).
 
+## Optional PostgreSQL storage
+
+`evds_mcp.depo` is an optional storage layer for series metadata and
+observations. It exists for two reasons: to avoid re-fetching a series
+that is already stored, and to query history with SQL, which the EVDS
+client itself does not offer (it only returns one request's response).
+
+It is not installed by default. Install the extra:
+
+```bash
+uv sync --extra depo
+```
+
+`import evds_mcp` works with no database and no `psycopg` installed;
+`depo.py` only imports `psycopg` when a `Depo` method actually runs, and
+raises a clear error naming the extra if it is missing.
+
+```python
+from evds_mcp.depo import Depo
+
+depo = Depo("host=127.0.0.1 port=5432 dbname=evds user=postgres")
+depo.kur()  # applies the schema, safe to call again later
+
+depo.seri_yaz(kunye)              # upsert one series' metadata
+depo.gozlem_yaz(kod, gozlemler)   # bulk upsert observations
+depo.son_gozlemler(kod, 12)       # last 12 observations, newest first
+depo.gecikmeli_oku(kod, 1)        # each observation with the prior period's value
+```
+
+### Schema
+
+```sql
+CREATE TABLE seri (
+    kod TEXT PRIMARY KEY, ad TEXT, ad_eng TEXT, grup TEXT,
+    frekans SMALLINT, kaynak TEXT, baslangic DATE, bitis DATE,
+    guncelleme TIMESTAMPTZ
+);
+CREATE TABLE gozlem (
+    kod TEXT REFERENCES seri(kod) ON DELETE CASCADE,
+    tarih DATE NOT NULL,
+    deger DOUBLE PRECISION,
+    cekilme TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (kod, tarih)
+);
+CREATE INDEX ON gozlem (kod, tarih DESC);
+```
+
+Four decisions in this schema are worth explaining, since they are not
+obvious from the DDL alone:
+
+- **`deger` is nullable.** A missing observation is not zero. EVDS
+  returns null for a period a series was not published in yet. Storing
+  0 would silently corrupt every mean and every difference computed
+  over the series.
+- **The primary key is `(kod, tarih)`**, the natural key of an
+  observation. It makes re-fetching a series idempotent through
+  `ON CONFLICT ... DO UPDATE`, and it makes a duplicate observation
+  impossible rather than merely unlikely.
+- **The index is `(kod, tarih DESC)`**, not `(kod, tarih)`. The
+  dominant query is "the last N observations of this series"
+  (`son_gozlemler`); descending order lets that be a plain index scan
+  with no sort step.
+- **All frequencies live in one table.** The date is the source of
+  truth; frequency is a property of the series, not of the
+  observation. A separate table per frequency would turn a query
+  across series of different frequencies into a union.
+
+### The lag query
+
+`gecikmeli_oku(kod, gecikme)` is the point of this layer: it returns
+each observation next to the value some number of periods earlier,
+using a window function instead of a self-join.
+
+```sql
+SELECT tarih, deger,
+       LAG(deger, %s) OVER (PARTITION BY kod ORDER BY tarih) AS onceki
+FROM gozlem
+WHERE kod = %s
+ORDER BY tarih
+```
+
+The first `gecikme` rows of a series have no prior value; `LAG` returns
+`NULL` for them rather than requiring special-case handling in Python.
+
 ## Python API
 
 The library can be used directly. Note that internal method names are in
@@ -252,6 +336,7 @@ code page is the cause.
 ```bash
 uv run pytest          # offline, against recorded fixtures
 uv run pytest -m live  # hits the real API, needs EVDS_API_KEY
+uv run pytest -m depo  # hits a real PostgreSQL, needs the depo extra installed
 ```
 
 Fixtures under `tests/fixtures/` are real EVDS responses.
