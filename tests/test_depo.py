@@ -26,10 +26,6 @@ _ANA_DSN = os.environ.get(
     "EVDS_TEST_DATABASE_URL", "host=127.0.0.1 port=5432 dbname=evds user=postgres"
 )
 _SEMA_ADI = "depo_test"
-# libpq'nun "options" parametresi arka uca komut satırı argümanı geçiyor;
-# search_path'i burada ayarlamak Depo'nun sabit `seri`/`gozlem` adlarına
-# hiç dokunmadan testleri kendi şemasına hapsediyor.
-_TEST_DSN = f"{_ANA_DSN} options='-c search_path={_SEMA_ADI}'"
 
 
 def _ham_baglanti():
@@ -44,10 +40,15 @@ def _ham_baglanti():
 
 @pytest.fixture
 def depo():
+    from psycopg.conninfo import make_conninfo
+
     with _ham_baglanti() as baglanti, baglanti.cursor() as imlec:
         imlec.execute(f"DROP SCHEMA IF EXISTS {_SEMA_ADI} CASCADE")
         imlec.execute(f"CREATE SCHEMA {_SEMA_ADI}")
-    d = Depo(_TEST_DSN)
+    # URL ve libpq keyword DSN biçimlerini aynı şekilde destekle.
+    # options, test sorgularını bu şemaya hapseder; üretim tablolarına dokunmaz.
+    test_dsn = make_conninfo(_ANA_DSN, options=f"-c search_path={_SEMA_ADI}")
+    d = Depo(test_dsn)
     d.kur()
     try:
         yield d
