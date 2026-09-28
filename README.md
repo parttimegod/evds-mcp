@@ -450,10 +450,12 @@ code page is the cause.
 ```bash
 uv run pytest          # offline, against recorded fixtures
 uv run pytest -m live  # hits the real API, needs EVDS_API_KEY
-uv run pytest -m depo  # hits a real PostgreSQL, needs the depo extra installed
+uv run --extra depo pytest -m depo  # hits a real PostgreSQL
 ```
 
-Fixtures under `tests/fixtures/` are real EVDS responses.
+GitHub Actions runs the offline tests and the PostgreSQL tests in separate
+jobs. The latter starts a disposable PostgreSQL service and uses only test
+data. Fixtures under `tests/fixtures/` are real EVDS responses.
 
 ## License
 
