@@ -289,3 +289,24 @@ def test_turkce_ad_bozulmadan_donuyor(depo):
     # Bilerek len() ile karşılaştırıyoruz, konsol çıktısıyla değil --
     # konsol Türkçe karakterleri güvenilmez şekilde gösterebiliyor.
     assert len(donen) == len(turkce_ad)
+
+
+def test_toplu_yazma_hatasinda_gozlem_ve_denetim_birlikte_geri_alinir(depo):
+    import psycopg
+
+    depo.seri_yaz(_ornek_kunye())
+    depo.gozlem_yaz(
+        "TP.TEST", date(2020, 1, 1), date(2020, 1, 31), [Gozlem("2020-1", 7.0)]
+    )
+    # İlk UPDATE başarılı olsa bile sonraki NUMERIC hatası bütün işlemi
+    # geri almalı; yarım veri ve sahte bir başarılı çekim kaydı kalmamalı.
+    with pytest.raises(psycopg.errors.InvalidTextRepresentation):
+        depo.gozlem_yaz(
+            "TP.TEST",
+            date(2020, 1, 1),
+            date(2020, 2, 29),
+            [Gozlem("2020-1", 99.0), Gozlem("2020-2", "sayisal-degil")],
+        )
+    rows = depo.gozlem_oku("TP.TEST", date(2020, 1, 1), date(2020, 2, 29))
+    assert [(r.tarih, r.deger) for r in rows] == [(date(2020, 1, 1), Decimal("7"))]
+    assert len(depo.cekimler_oku("TP.TEST")) == 1
