@@ -48,3 +48,9 @@ jobs:
           enable-cache: true
       - run: uv sync --extra depo
       - run: uv run --extra depo pytest -m depo -q
+
+      - name: Verify primary-key reverse scan experiment
+        run: >-
+          docker exec -i ${{ job.services.postgres.id }}
+          psql -U postgres -d evds -v ON_ERROR_STOP=1
+          < examples/sql/indeks_plani.sql
