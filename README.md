@@ -292,10 +292,13 @@ from the DDL alone:
   observation. It makes re-fetching a series idempotent through
   `ON CONFLICT ... DO UPDATE`, and it makes a duplicate observation
   impossible rather than merely unlikely.
-- **The index is `(kod, tarih DESC)`**, not `(kod, tarih)`. The
-  dominant query is "the last N observations of this series"
-  (`son_gozlemler`); descending order lets that be a plain index scan
-  with no sort step.
+- **The primary-key B-tree can also serve newest-first reads.** With
+  `WHERE kod = ...`, PostgreSQL can scan `(kod, tarih)` backwards for
+  `ORDER BY tarih DESC LIMIT ...`. The separate DESC index currently in
+  the schema is therefore potentially redundant for this query; descending
+  syntax alone is not evidence of a speedup. Run
+  [the isolated 240,000-row plan experiment](examples/sql/indeks_plani.sql)
+  and inspect `EXPLAIN (ANALYZE, BUFFERS)` before choosing indexes.
 - **All frequencies live in one table.** The date is the source of
   truth; frequency is a property of the series, not of the
   observation. A separate table per frequency would turn a query
@@ -450,10 +453,12 @@ code page is the cause.
 ```bash
 uv run pytest          # offline, against recorded fixtures
 uv run pytest -m live  # hits the real API, needs EVDS_API_KEY
-uv run pytest -m depo  # hits a real PostgreSQL, needs the depo extra installed
+uv run --extra depo pytest -m depo  # hits a real PostgreSQL
 ```
 
-Fixtures under `tests/fixtures/` are real EVDS responses.
+GitHub Actions runs the offline tests and the PostgreSQL tests in separate
+jobs. The latter starts a disposable PostgreSQL service and uses only test
+data. Fixtures under `tests/fixtures/` are real EVDS responses.
 
 ## License
 

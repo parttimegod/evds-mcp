@@ -26,10 +26,6 @@ _ANA_DSN = os.environ.get(
     "EVDS_TEST_DATABASE_URL", "host=127.0.0.1 port=5432 dbname=evds user=postgres"
 )
 _SEMA_ADI = "depo_test"
-# libpq'nun "options" parametresi arka uca komut satırı argümanı geçiyor;
-# search_path'i burada ayarlamak Depo'nun sabit `seri`/`gozlem` adlarına
-# hiç dokunmadan testleri kendi şemasına hapsediyor.
-_TEST_DSN = f"{_ANA_DSN} options='-c search_path={_SEMA_ADI}'"
 
 
 def _ham_baglanti():
@@ -44,10 +40,15 @@ def _ham_baglanti():
 
 @pytest.fixture
 def depo():
+    from psycopg.conninfo import make_conninfo
+
     with _ham_baglanti() as baglanti, baglanti.cursor() as imlec:
         imlec.execute(f"DROP SCHEMA IF EXISTS {_SEMA_ADI} CASCADE")
         imlec.execute(f"CREATE SCHEMA {_SEMA_ADI}")
-    d = Depo(_TEST_DSN)
+    # URL ve libpq keyword DSN biçimlerini aynı şekilde destekle.
+    # options, test sorgularını bu şemaya hapseder; üretim tablolarına dokunmaz.
+    test_dsn = make_conninfo(_ANA_DSN, options=f"-c search_path={_SEMA_ADI}")
+    d = Depo(test_dsn)
     d.kur()
     try:
         yield d
@@ -288,3 +289,24 @@ def test_turkce_ad_bozulmadan_donuyor(depo):
     # Bilerek len() ile karşılaştırıyoruz, konsol çıktısıyla değil --
     # konsol Türkçe karakterleri güvenilmez şekilde gösterebiliyor.
     assert len(donen) == len(turkce_ad)
+
+
+def test_toplu_yazma_hatasinda_gozlem_ve_denetim_birlikte_geri_alinir(depo):
+    import psycopg
+
+    depo.seri_yaz(_ornek_kunye())
+    depo.gozlem_yaz(
+        "TP.TEST", date(2020, 1, 1), date(2020, 1, 31), [Gozlem("2020-1", 7.0)]
+    )
+    # İlk UPDATE başarılı olsa bile sonraki NUMERIC hatası bütün işlemi
+    # geri almalı; yarım veri ve sahte bir başarılı çekim kaydı kalmamalı.
+    with pytest.raises(psycopg.errors.InvalidTextRepresentation):
+        depo.gozlem_yaz(
+            "TP.TEST",
+            date(2020, 1, 1),
+            date(2020, 2, 29),
+            [Gozlem("2020-1", 99.0), Gozlem("2020-2", "sayisal-degil")],
+        )
+    rows = depo.gozlem_oku("TP.TEST", date(2020, 1, 1), date(2020, 2, 29))
+    assert [(r.tarih, r.deger) for r in rows] == [(date(2020, 1, 1), Decimal("7"))]
+    assert len(depo.cekimler_oku("TP.TEST")) == 1

@@ -22,3 +22,35 @@ jobs:
       # Testler ağa çıkmıyor, API anahtarı gerekmiyor. Canlı test
       # -m 'not live' ile zaten dışarıda.
       - run: uv run pytest -q
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: evds
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d evds"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      EVDS_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/evds
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --extra depo
+      - run: uv run --extra depo pytest -m depo -q
+
+      - name: Verify primary-key reverse scan experiment
+        run: >-
+          docker exec -i ${{ job.services.postgres.id }}
+          psql -U postgres -d evds -v ON_ERROR_STOP=1
+          < examples/sql/indeks_plani.sql
