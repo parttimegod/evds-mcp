@@ -268,23 +268,17 @@ def test_stationarity(
     end: str,
     frequency: str = "aylık",
 ) -> dict:
-    """Bir seriyi durağanlaştıran en düşük dereceli dönüşümü bulur.
+    """ADF sonuçlarını ve bu test kuralının önerdiği dönüşümü döndürür.
 
-    ADF testini seviyede, log farkında ve ardışık farklarda çalıştırır;
-    serinin I(d) derecesini ve önerilen dönüşümü döndürür.
-
-    Fark derecesini varsayma. "Fiyat endeksinde log farkı al" gibi genel
-    kurallar Türkiye verisinde tutmayabiliyor -- TÜFE 2010-2026 aralığında
-    I(2), yani log farkı bile durağan değil.
-
-    Modelleme, regresyon ya da karşılaştırma yapmadan önce bunu çağır.
+    Sabit terim, AIC gecikme seçimi ve %5 eşik kullanılır. Dönen I(d)
+    sınıflaması bu örnekleme bağlıdır; kesin bütünleşme derecesi değildir.
+    Eksik değerler testten önce atılır.
 
     Args:
         code: Seri kodu.
         start: Başlangıç, YYYY-AA-GG.
         end: Bitiş, YYYY-AA-GG.
-        frequency: günlük, işgünü, haftalık, ayda2, aylık, çeyreklik,
-            6aylık, yıllık.
+        frequency: İstenen EVDS frekansı.
     """
     evds, _ = _baglan()
     b, s = _tarih_oku(start, "start"), _tarih_oku(end, "end")
@@ -303,8 +297,8 @@ def test_stationarity(
         "adf_p_degerleri": {k: round(v, 4) for k, v in d.p_degerleri.items()},
         "notlar": d.notlar,
         "yorum": (
-            "ADF'de H0 birim kök vardır. p < 0.05 ise durağan. "
-            "butunlesme_derecesi kaç kez fark alınması gerektiğidir."
+            "ADF'de H0 birim köktür. p < 0.05 ise H0 reddedilir. "
+            "butunlesme_derecesi bu örneklemdeki test kuralının sınıflamasıdır."
         ),
     }
 
@@ -318,37 +312,22 @@ def analyze_relationship(
     transform: str | None = None,
     max_lag: int = 0,
 ) -> dict:
-    """İki seri arasındaki ilişkiyi metodolojik kontrollerden geçirip verir.
+    """İki serinin korelasyonunu dönüşüm ve ADF sonuçlarıyla döndürür.
 
-    İki seriyi karşılaştırmak istediğinde bunu kullan. get_series'ten
-    gelen ham sayılarla kendin korelasyon hesaplama: makro seriler
-    genelde durağan değildir ve seviye korelasyonu ortak trend yüzünden
-    şişkin çıkar. Somut örnek: TÜFE ile politika faizi seviyelerinde
-    korelasyon 0.86, fark alındıktan sonra 0.16.
-
-    Bu araç önce her seriyi durağanlık testinden geçirir, gereken
-    dönüşümü uygular, hangi dönüşümü uyguladığını söyler ve sonucu
-    ondan sonra verir. İkisi de I(1) ise eşbütünleşmeyi de test eder.
-
-    İki serinin bütünleşme derecesi farklıysa araç ikisini de yüksek
-    dereceden farklar ve bu sinyali zayıflatabilir; böyle bir durumda
-    iktisadi olarak doğru dönüşümü biliyorsan transform ile ver.
-
-    İktisatta ilişkiler çoğu zaman eşanlı değildir. Kur geçişkenliği
-    ölçüldü: eşanlı korelasyon 0.42, bir ay gecikmede 0.57. Gecikmeli
-    olabileceğini düşündüğün her ilişkide max_lag ver.
+    Yalnızca ortak tarihli dolu gözlemler kullanılır. İki seri de I(1)
+    sınıflanırsa Engle-Granger testi eklenir. Otomatik dönüşüm yüksek
+    fark derecesini iki seriye de uygular; bu diğer seriyi aşırı
+    farklayabilir. Gecikmeler kalan gözlemleri sayar, takvim boşluklarını
+    doldurmaz. Sonuçlar nedensellik veya model uygunluğu kanıtı değildir.
 
     Args:
         codes: Tam olarak iki seri kodu.
         start: Başlangıç, YYYY-AA-GG.
         end: Bitiş, YYYY-AA-GG.
-        frequency: günlük, işgünü, haftalık, ayda2, aylık, çeyreklik,
-            6aylık, yıllık.
-        transform: Dönüşümü elle seç. "logd1" yüzde değişim demek ve
-            fiyat, kur, endeks gibi serilerde iktisadi karşılığı olan
-            dönüşüm budur. "d1", "d2" fark alır, "seviye" dokunmaz.
-            Boş bırakılırsa durağanlık testine göre seçilir.
-        max_lag: Kaç döneme kadar gecikme taransın. 0 ise sadece eşanlı.
+        frequency: İstenen EVDS frekansı.
+        transform: logd1 log oranı; d1/d2 fark; level/seviye dönüşümsüz.
+            Verilmezse ADF kuralına göre seçilir.
+        max_lag: Taranan en yüksek gözlem gecikmesi; 0 yalnızca eşanlı.
     """
     evds, _ = _baglan()
     if len(codes) != 2:
