@@ -11,9 +11,9 @@ relationship analysis.
 
 ## Features
 
-- Concept-based series search across 676 data groups (Turkish and English)
+- Concept-based series search in Turkish and English
 - Single or multi-series data retrieval
-- ADF stationarity testing and order-of-integration detection
+- ADF checks at level, log difference and successive differences
 - Relationship analysis with automatic transformation, lag scanning and
   Engle-Granger cointegration testing
 - Turkish text normalisation for search
@@ -71,57 +71,9 @@ How far back does the house price index go?
 Is there a relationship between the dollar rate and inflation?
 ```
 
-The last question produces the following. First the model looks up codes:
-
-```jsonc
-// search_series("dollar exchange rate")
-{
-  "seriler": [
-    {
-      "kod": "TP.DK.USD.A.YTL",
-      "ad_eng": "(USD) US Dollar (Buying)",
-      "grup": "bie_dkdovytl",
-      "frekans": "GÜNLÜK",
-      "kapsam": "02-01-1950 - 27-08-2026"
-    }
-  ]
-}
-```
-
-Then analyses the relationship. Note that the level correlation is
-returned but flagged, and the strongest relationship is not
-contemporaneous:
-
-```jsonc
-// analyze_relationship(["TP.DK.USD.A.YTL", "TP.TUKFIY2025.GENEL"],
-//                      "2010-01-01", "2026-06-01",
-//                      transform="logd1", max_lag=6)
-{
-  "donusum": "logd1",
-  "korelasyon": 0.421,
-  "gozlem": 197,
-  "gecikme": {
-    "profil": { "0": 0.421, "1": 0.5685, "2": 0.3359, "3": 0.2079 },
-    "tepe_gecikme": 1,
-    "tepe_korelasyon": 0.5685
-  },
-  "ham_seviye_korelasyonu": {
-    "deger": 0.9856,
-    "uyari": "Bu rakamı kullanma. Seriler durağan olmadığı için sahte
-              regresyon; ortak trend yüzünden şişkin çıkıyor."
-  },
-  "uyarilar": [
-    "Bütünleşme dereceleri farklı: TP.DK.USD.A.YTL I(1),
-     TP.TUKFIY2025.GENEL I(2).",
-    "TP.TUKFIY2025.GENEL: istenen dönüşüm (logd1) bu seriyi
-     durağanlaştırmıyor (ADF p=0.3512). Sonuç şişkin olabilir.",
-    "En güçlü ilişki 1. gecikmede (0.5685), eşanlı değil (0.421)."
-  ],
-  "yorum": "Bu bir korelasyondur, nedensellik değildir."
-}
-```
-
-Tool output messages are in Turkish.
+Relationship analysis returns the transformation, ADF p-values,
+correlation and any requested lag profile. It also returns the level
+correlation with an interpretation note. Tool output messages are in Turkish.
 
 ## Tools
 
@@ -151,13 +103,14 @@ of them at once fills the context window. Pass `full=True` for everything.
 ### `test_stationarity(code, start, end, frequency="monthly")`
 
 Runs ADF at level, on the log difference and on successive differences.
-Returns the order of integration I(d) and the recommended transformation.
+Returns an I(d) classification and a transformation based on that test
+rule. This classification depends on the sample and test settings.
 
 ### `analyze_relationship(codes, start, end, frequency="monthly", transform=None, max_lag=0)`
 
 Analyses the relationship between two series. Both are tested for
 stationarity first, the required transformation is applied, and the
-output states which transformation was used. If both series are I(1) it
+output states which transformation was used. If both series are classified as I(1), it
 also runs an Engle-Granger cointegration test.
 
 - `transform` — set the transformation manually: `logd1`, `d1`, `d2`,
@@ -167,35 +120,35 @@ also runs an Engle-Granger cointegration test.
 Frequency values accept both English and Turkish: `daily`, `business`,
 `weekly`, `semimonthly`, `monthly`, `quarterly`, `semiannual`, `annual`.
 
-## Why there is no raw correlation tool
+## Interpreting relationship output
 
-There is no tool that computes a level correlation. Macroeconomic series
-are usually non-stationary, and correlating them at level produces
-spurious results driven by a shared trend.
+The server exposes relationship analysis with ADF checks rather than a
+standalone correlation command. A high level correlation between trending
+series is easy to overinterpret; the tests and transformation therefore
+travel with the number.
 
-USD/TRY and CPI, monthly, 2010-01 to 2026-06:
+ADF uses a constant term, AIC lag selection and a 5% threshold.
+Failure to reject a unit root is not proof that a series is non-stationary.
+The returned integration degree is a working classification under those
+settings, not a property established for every period.
 
-| Method | Correlation | Note |
-|---|---|---|
-| Level | 0.99 | Spurious regression (ADF p = 1.00 and 0.99) |
-| Automatic transform (d2) | 0.15 | Over-differenced: USD/TRY is I(1), CPI is I(2) |
-| Log difference + 1 month lag | 0.57 | |
+Automatic selection applies the higher suggested difference order to both
+series. That can over-difference the other series. Use `transform` to
+compare a chosen specification; the output warns when its available ADF
+result does not reject a unit root.
 
-Lag profile:
+Lag scanning selects the largest absolute correlation in the same sample.
+It does not correct for multiple comparisons or validate the selected lag
+on new data. Neither that peak nor a cointegration result establishes
+causality.
 
-```
-0 months  +0.42
-1 month   +0.57
-2 months  +0.34
-3 months  +0.21
-```
+The MCP analysis drops missing values, and relationship analysis keeps
+only complete date pairs. Its differences and lags count those remaining
+observations, so a lag can span a gap. The PostgreSQL calendar-lag method
+below is separate from this analysis path.
 
-`analyze_relationship` still returns the level correlation, labelled with
-a warning.
-
-Turkish CPI is I(2) over this period: neither first differencing nor log
-differencing makes it stationary. Full ADF output is in
-[ASAMA2.md](ASAMA2.md) (Turkish).
+[ASAMA2.md](ASAMA2.md) records the earlier USD/TRY–CPI comparison, the
+current calculation settings and a command for repeating it.
 
 ## Optional PostgreSQL storage
 

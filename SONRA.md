@@ -1,44 +1,35 @@
-# Sonra
+# Açık işler
 
-Aklıma gelen ama şimdi yapmayacağım şeyler. İlk sürüm çıkana kadar
-buraya yazıp geçiyorum, yoksa hiç bitmeyecek.
+## Veri ve arama
 
-## Arama
-- Şu an puanlı keyword eşleşmesi. Anlamsal aramaya geçilebilir —
-  yerel embedding modeli var, katalog zaten küçük.
-- Sıralama ince ayarı: "enflasyon" sorgusunda İstanbul TÜFE'si ulusal
-  TÜFE'nin önüne geçiyor, çünkü eşit puanda kısa adı seçiyoruz. Ad
-  uzunluğu zayıf bir ölçüt.
-- Arşiv tespitini ada bakarak yapıyoruz ("(Arşiv)" geçiyor mu). END_DATE
-  eski mi diye bakmak çok daha sağlam olur -- alan zaten künyede.
-- Eşanlamlı sözlüğü: "enflasyon" -> TÜFE, ÜFE. "faiz" -> politika faizi,
-  gecelik, ağırlıklı ortalama fonlama.
-- Kısaltmalar: TÜFE/tufe/CPI hepsi aynı yere gitmeli.
+- Katalog önbelleği, her başlangıçta aynı veriyi çekmeyi azaltabilir.
+- Eşit arama puanında kısa adı tercih etmek zayıf bir kural; ulusal ve
+  bölgesel serilerle sıralama örnekleri gerekiyor.
+- Arşiv tespiti ad içindeki etikete bakıyor. Kapsam tarihleriyle birlikte
+  değerlendirilmesi daha uygun olabilir.
+- Frekans kodları canlı API ile daha geniş sınanmalı. İşgünü ve haftalık
+  serilerin tatil kaymalarına özel takvim gerekir.
 
-## Veri
-- Katalog önbelleği. Şu an her açılışta çekiyor.
-- TÜİK. Ayrı API, ayrı dert.
-- BDDK, TÜİK bölgesel seriler.
-- Frekans dönüşümü (aylıktan çeyreğe toplama).
+## Analiz
 
-## Doğrulama
-- Frekans kodlarının tamamını API'ye karşı doğrula. Şu an sadece
-  5 = aylık'tan eminim, gerisi dokümandan.
-- serieList künyesinde METADATA_LINK ve REV_POL_LINK alanları var,
-  çoğu null geliyor. Dolu olanları künyeye ekle.
-- datagroups mode=1 ve mode=2 ne işe yarıyor? mode=2&code=10 boş döndü,
-  mode=0 tamamını veriyor. Kategoriye göre filtreleme başka türlü olmalı.
+- MCP analizindeki eksik gözlemler atılıyor. Fark ve gecikmenin takvimde
+  birden fazla dönemi aşmasını önleyen bir veri hazırlama yolu gerekiyor.
+- Sabit terimli ADF tek seçenek. Trendli test, KPSS ve kırılma kontrolleri
+  sonuçları karşılaştırmak için eklenebilir.
+- Gecikme tepesi aynı örneklemde seçiliyor. Yeni veri üzerinde doğrulama
+  ve çoklu karşılaştırma değerlendirmesi yapılmıyor.
+- Fark dereceleri ayrı serilerde farklı olabilir. Ortak en yüksek derece
+  yerine açıkça seçilmiş alternatif modeller karşılaştırılabilir.
+- Bir tahmin aracı eklenirse hata aralıkları ve zaman sıralı doğrulama
+  birlikte tasarlanmalı.
 
-## Aşama 2
-Durağanlık zorunluluğu ve sahte regresyon uyarısı yapıldı (ASAMA2.md).
-Kalanlar:
-- Tahmin aracı. Eklenirse güven aralığı zorunlu olmalı, nokta tahmini
-  dönmemeli.
-- Artık teşhisleri: regresyon aracı eklenirse Durbin-Watson, Breusch-Godfrey.
-- Yapısal kırılma testi. ADF kırılmayı birim kök sanıyor; şu an
-  "durağanlaşmadı" deyip geçiyoruz, Zivot-Andrews daha doğru olur.
-- Mevsimsellik. Aylık serilerde mevsimsel birim kök (HEGY) bakılmıyor.
+## PostgreSQL
 
-## Ambalaj
-- PyPI'ya yükleme
-- README'ye örnek oturum kaydı (asciinema?)
+- Gözlem tablosu son değeri tutuyor; revizyonların eski değerleri yok.
+  Tam revizyon geçmişi ayrı bir tablo ve kullanım kararı gerektirir.
+- EVDS istemcisi sayıları önce float'a çeviriyor. API metnindeki bütün
+  basamakları korumak için dönüşüm istemci tarafında ele alınmalı.
+- Eski kurulumlarda yinelenen DESC indeks kalabilir. Ölçülmüş bir
+  geçiş gereksinimi oluşursa ayrı bir migration hazırlanabilir.
+
+PyPI yayını ve ek veri kaynakları bu işlerin ardından değerlendirilebilir.

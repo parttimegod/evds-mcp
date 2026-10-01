@@ -1,156 +1,80 @@
-# Aşama 2 — metodoloji katmanı
+# İlişki analizi notları
 
-Aşama 1 modele veri veriyor ama nasıl kullanacağını söylemiyor. Bu dosya,
-ikinci katmanın neden gerektiğinin kanıtı. Hepsi ölçüldü, tahmin yok.
+Araç, bir korelasyon sayısını dönüşüm ve test sonuçlarıyla birlikte
+döndürüyor. Amaç, serinin seviyesiyle farkını karşılaştırırken hangi
+hesabın yapıldığını görünür tutmak.
 
-## Deney
+## Önceki örnek
 
-Soru şu: "Enflasyon ile politika faizi arasında ilişki var mı?"
+USD/TRY (`TP.DK.USD.A.YTL`) ile TÜFE (`TP.TUKFIY2025.GENEL`),
+aylık, Ocak 2010–Haziran 2026 için önceki geliştirme notlarında şu
+sonuçlar kaydedilmişti:
 
-Veri: TP.TUKFIY2025.GENEL ve TP.BISPOLFAIZ.TUR, aylık, 2010-01 – 2026-06,
-198 gözlem, eksik yok.
+| Hesap | Korelasyon |
+| --- | ---: |
+| Seviyeler | 0.9856 |
+| İki seriye de ikinci fark | 0.1546 |
+| Log farkı, kur bir gözlem önde | 0.5685 |
 
-Aşama 1 araçları bu veriyi tertemiz getiriyor. Sorun veride değil, veriyle
-ne yapıldığında.
+Aynı notlarda TÜFE için seviye ADF p-değeri 0.9973, ilk fark 0.9920,
+ikinci fark 0.0000 olarak yuvarlanmış ve log farkı 0.3512 verilmişti.
+Bu örneklem ve ayarlarda araç TÜFE'yi I(2) olarak sınıfladı. Buradan
+Türkiye TÜFE'sinin her dönemde kesin olarak I(2) olduğu sonucu çıkmaz.
 
-## Modelin vereceği cevap
+Bu sayılar tarihsel notlardır. Kullanılan tam veri görüntüsü repoda
+saklanmadı ve bu incelemede canlı API ile yeniden hesaplanmadı.
+Revizyonlar ve test sürümleri sonucu değiştirebilir. Yüksek bir seviye
+korelasyonu tek başına ilişkinin sahte olduğunu, yüksek gecikmeli
+korelasyon da kur geçişkenliğini kanıtlamaz.
 
-```
-seviye korelasyonu TÜFE ~ FAİZ : +0.863
-```
+## Şimdiki hesap
 
-Bir dil modeli buradan "güçlü pozitif ilişki var" der. Rakam ikna edici
-görünüyor, cümle de makul duruyor.
+`analysis.py`, statsmodels ADF testini sabit terim ve AIC gecikme seçimiyle
+çalıştırıyor. Eşik %5. Önce seviye, pozitif serilerde log farkı, ardından
+en fazla üç ardışık fark deneniyor. Log farkının testi eşiği geçerse
+o dönüşüm tercih ediliyor; aksi durumda ilk reddeden fark derecesi
+kullanılıyor.
 
-## Doğru cevap
+ADF'nin sıfır hipotezi birim köktür. Reddedilememesi kesin birim kök
+kanıtı değildir. Örneklem uzunluğu, deterministik terimler ve kırılmalar
+ayrıca değerlendirilmeli. Kullanılan testin ayrıntıları
+[statsmodels ADF dokümanında](https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html).
 
-```
-ADF (H0 = birim kök var)
-  TÜFE seviye   p = 0.9973   durağan değil
-  FAİZ seviye   p = 0.2941   durağan değil
+İki seri için otomatik dönüşüm, önerilen derecelerin yüksek olanını
+kullanıyor. Bu ortak kural diğer seriyi aşırı farklayabilir.
+`transform` ile bir alternatif verilebilir; mevcut ADF sonucu
+uygunsuzsa uyarı döner.
 
-fark korelasyonu d(TÜFE) ~ d(FAİZ) : +0.158
-```
+İki seri de I(1) sınıflandığında
+[Engle–Granger testi](https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.coint.html)
+çalışır. `var` ve `yok` alanları %5 eşiğinin kısa gösterimidir,
+kesin varlık/yokluk hükmü değildir.
 
-İki seri de durağan değil. Yani 0.863 sahte regresyonun ders kitabı
-örneği — ikisi de zamanla yukarı gittiği için birlikte hareket ediyor
-görünüyorlar. Fark alındığında ilişki 0.863'ten 0.158'e düşüyor.
+Gecikme taraması aynı örneklemde en yüksek mutlak korelasyonu seçer.
+Çoklu karşılaştırma düzeltmesi ve dış örneklem kontrolü yok.
+Eksik tarih çiftleri atıldığı için gecikme kalan gözlem sayısını izler;
+bir gözlem her zaman bir takvim ayı değildir.
 
-**Model beş kat abartılmış bir ilişkiyi kendinden emin biçimde rapor
-ediyor.** Aşama 2'nin engelleyeceği şey tam olarak bu.
+## Yeniden çalıştırma
 
-## Türkiye'ye özel bulgu
+Geçerli `EVDS_API_KEY` ortam değişkeniyle, repo kökünde:
 
-Standart tarif "durağan değilse bir fark al" der. Burada yetmiyor:
+```bash
+uv run python - <<'PY'
+import json
+from evds_mcp.server import analyze_relationship
 
-```
-TÜFE seviye                  p = 0.9973   durağan değil
-1. fark                      p = 0.9920   durağan değil
-2. fark                      p = 0.0000   DURAGAN
-log fark (aylık enflasyon)   p = 0.3512   durağan değil
-log fark 12 (yıllık enflasyon) p = 0.6554  durağan değil
-```
-
-Bu dönemde Türkiye TÜFE'si **I(2)**. Enflasyon *oranının* kendisi bile
-birim köklü, çünkü oran da trendli: yüzde 7'den 75'e çıkıp geri indi.
-
-Sonuç: bir modelin ezberindeki "fiyat endeksinde log farkı al" kuralı
-Türkiye verisinde yanlış cevap üretiyor. Genel geçer tarif burada
-tutmuyor, testi fiilen çalıştırmak gerekiyor.
-
-## Bunlardan çıkan kurallar
-
-1. **Seviye serilerle korelasyon veya regresyon yok** — önce ADF.
-   Sonuç durağan değilse rakam raporlanmadan önce uyarı çıkmalı.
-2. **Fark derecesini varsayma, ölç.** I(1) varsayımı bu veride yanlış.
-   Kaçıncı farkın durağan olduğu test edilip söylenmeli.
-3. **Uygulanan dönüşüm çıktıda yazmalı.** "d2(TÜFE) ile d(FAİZ)
-   arasında korelasyon 0.158" — hangi dönüşümle konuşulduğu görünmeli.
-4. **Korelasyon nedensellik değil.** Kimlik stratejisi yoksa nedensel
-   cümle kurulmamalı; Granger bile "nedensellik" demek için yetmez.
-5. **Nokta tahmini değil aralık.** Tahmin döndüren her araç güven
-   aralığı vermeli.
-
-## Yapıldı
-
-`analysis.py` ve iki yeni araç: `test_stationarity`, `analyze_relationship`.
-
-Zorlama şöyle işliyor: **seviye korelasyonu hesaplayan bir araç yok.**
-İki seriyi karşılaştırmanın tek yolu `analyze_relationship` ve o kendi
-içinde durağanlık testini yapıyor. Model yanlış rakama ulaşamıyor, çünkü
-o rakamı üreten bir yol açılmamış.
-
-Aynı soruyu şimdi sorunca dönen cevap:
-
-```
-donusum            d2
-korelasyon         0.0348
-ham_seviye_kor.    0.8628  + "bu rakamı kullanma, sahte regresyon"
-duraganlik         TÜFE I(2), FAİZ I(1)
-uyarı              dereceler farklı, düşük dereceli seri aşırı farklanmış olabilir
-yorum              korelasyondur, nedensellik değildir
+result = analyze_relationship(
+    codes=["TP.DK.USD.A.YTL", "TP.TUKFIY2025.GENEL"],
+    start="2010-01-01",
+    end="2026-06-01",
+    frequency="monthly",
+    transform="logd1",
+    max_lag=6,
+)
+print(json.dumps(result, ensure_ascii=False, indent=2))
+PY
 ```
 
-Beş kuralın karşılıkları:
-
-1. ADF testi araca gömülü, atlanamıyor
-2. Fark derecesi ölçülüyor; I(2) çıkınca ayrıca uyarı veriliyor
-3. `donusum` alanı her çıktıda var
-4. `yorum` alanında nedensellik uyarısı sabit
-5. Tahmin aracı henüz yok; eklendiğinde aralık zorunlu olacak (SONRA.md)
-
-Ek olarak: iki seri de I(1) ise Engle-Granger eşbütünleşme testi
-çalışıyor. Eşbütünleşme varsa sadece farklarla çalışmak uzun dönem
-bilgisini atar, çıktı bunu söylüyor.
-
-## Aracı kullanırken çıkan iki eksik
-
-Metodoloji katmanı bittikten sonra aracı gerçek bir soruyla denedim:
-kur geçişkenliği. İki eksik ortaya çıktı, ikisi de düzeltildi.
-
-### Eksik 1: gecikme yok
-
-USD/TRY ve TÜFE, aylık log farkı, 2010-2026:
-
-```
-gecikme 0 ay : +0.421
-gecikme 1 ay : +0.568   <- tepe
-gecikme 2 ay : +0.336
-gecikme 3 ay : +0.208
-...
-gecikme 12 ay: -0.034
-```
-
-Kur geçişkenliği bir ay gecikmeyle en güçlü. Sadece eşanlı bakan bir
-analiz ilişkiyi olduğundan zayıf gösteriyor. `max_lag` eklendi; tepe
-eşanlı değilse çıktı bunu uyarı olarak söylüyor.
-
-### Eksik 2: dereceler farklıysa aşırı farklama
-
-USD/TRY I(1), TÜFE I(2). Araç ikisini de d2'ye zorlayınca korelasyon
-0.155 çıkıyordu — sinyal farklamada eriyor. Oysa iktisadi olarak doğru
-dönüşüm ikisi için de log farkı (yüzde değişim): 0.421.
-
-`transform` parametresi eklendi. Dönüşüm elle verilebiliyor, ama seriyi
-durağanlaştırmıyorsa araç bunu söylüyor:
-
-```
-TP.TUKFIY2025.GENEL: istenen dönüşüm (logd1) bu seriyi durağanlaştırmıyor
-(ADF p=0.3512). Sonuç şişkin olabilir.
-```
-
-Susup uygulamak da, reddetmek de yanlış olurdu. Doğrusu uygulayıp
-sorumluluğu görünür kılmak.
-
-### USD/TRY ~ TÜFE: aynı sorunun üç cevabı
-
-```
-ham seviye korelasyonu     0.9856   <- model bunu söylerdi
-otomatik dönüşüm (d2)      0.1546   <- aşırı farklanmış
-logd1, gecikme 1           0.5685   <- doğru cevap
-```
-
-Üçü de aynı veriden çıkıyor. Hangisinin doğru olduğu veriye bakarak
-değil, testleri çalıştırarak belli oluyor.
-
-Deney betikleri repoda yok, tek seferlikti; sayılar yukarıda.
+Bu komut güncel API verisini kullanır; yukarıdaki tarihsel sayıları
+birebir tekrar etmesi beklenmemeli.

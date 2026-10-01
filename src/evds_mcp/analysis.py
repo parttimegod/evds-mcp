@@ -1,11 +1,7 @@
-"""Durağanlık testleri ve ilişki analizi.
+"""ADF sonuçları ve uygulanan dönüşümle birlikte korelasyon raporlar.
 
-Buranın amacı hesap yapmak değil, yanlış hesabı imkânsız kılmak.
-
-Gerekçesi ASAMA2.md'de ölçülerek yazıldı: TÜFE ve politika faizi
-seviyelerinde korelasyon 0.863 çıkıyor, ikisi de durağan olmadığı için
-bu sahte. Fark alınınca 0.158. Bir dil modeli aradaki farkı kendiliğinden
-görmüyor -- o yüzden ham korelasyonu hesaplayan bir araç sunmuyoruz.
+Test sonuçları kullanılan örnekleme ve ADF ayarlarına bağlıdır. Dönüşüm
+ve gecikme seçimi tek başına iktisadi ilişkiyi veya nedenselliği kanıtlamaz.
 """
 
 from __future__ import annotations
@@ -16,11 +12,10 @@ from dataclasses import dataclass, field
 
 from statsmodels.tsa.stattools import adfuller, coint
 
-# ADF için makul bir alt sınır. Altında test anlamsız.
+# Uygulamanın kabul ettiği en kısa test girdisi.
 ASGARI_GOZLEM = 20
 
-# Fark almanın da bir sınırı var; I(3) gerçek veride neredeyse yok,
-# oraya geliyorsak muhtemelen seri bozuk.
+# Otomatik dönüşüm aramasını üç farkla sınırlıyoruz.
 MAKS_FARK = 3
 
 ALFA = 0.05
@@ -71,11 +66,10 @@ def donustur(x: list[float], donusum: str) -> list[float]:
 
 
 def duraganlik(x: list[float]) -> Duraganlik:
-    """Seriyi durağanlaştıran en düşük dereceli dönüşümü bulur.
+    """ADF'de birim kök sıfır hipotezini reddeden ilk dönüşümü arar.
 
-    Fark derecesini varsaymıyoruz, ölçüyoruz. ASAMA2.md'deki ölçüme göre
-    Türkiye TÜFE'si bu dönemde I(2) -- yani "fiyat endeksinde bir log
-    farkı al" ezberi burada yanlış sonuç veriyor.
+    Sabit terim, AIC gecikme seçimi ve %5 eşik kullanılır. Dönen derece
+    bu kurala dayalı bir sınıflamadır; kesin bütünleşme derecesi değildir.
     """
     p = {}
     notlar: list[str] = []
@@ -101,22 +95,22 @@ def duraganlik(x: list[float]) -> Duraganlik:
             break
 
     if log_yeterli and (derece is None or derece >= 1):
-        notlar.append("Log farkı durağan; yüzde değişim olarak yorumlanabilir.")
+        notlar.append("Log farkında ADF birim kök hipotezi reddedildi.")
         return Duraganlik(
             derece=1, donusum="logd1", p_degerleri=p, log_yeterli=True, notlar=notlar
         )
 
     if derece is None:
         notlar.append(
-            f"{MAKS_FARK} farka kadar durağanlaşmadı. Seride yapısal kırılma "
-            "olabilir; ADF kırılmayı birim kök sanar."
+            f"{MAKS_FARK} farka kadar ADF birim kök hipotezi reddedilmedi. "
+            "Örneklem, test ayarları ve yapısal kırılmalar ayrıca incelenmeli."
         )
         return Duraganlik(derece=None, donusum="seviye", p_degerleri=p, notlar=notlar)
 
     if derece >= 2:
         notlar.append(
-            f"Seri I({derece}). Tek fark ya da log farkı yetmiyor -- "
-            "standart 'log farkı al' kuralı bu seride yanlış sonuç verir."
+            f"Bu örneklemde ADF kuralı seriyi I({derece}) olarak sınıfladı. "
+            "Tek fark ve log farkında birim kök hipotezi reddedilmedi."
         )
     return Duraganlik(derece=derece, donusum=f"d{derece}", p_degerleri=p, notlar=notlar)
 
@@ -145,13 +139,10 @@ def gecikmeli_korelasyon(
     b: list[float],
     maks_gecikme: int = 12,
 ) -> dict:
-    """a'nın b'yi kaç dönem önceden takip ettiğini arar.
+    """a'nın k dönem önceki değeriyle b'nin korelasyonunu tarar.
 
-    Ekonomide ilişkiler çoğu zaman eşanlı değil. Kur geçişkenliği ölçüldü:
-    eşanlı korelasyon 0.42, bir ay gecikmede 0.57. Sadece eşanlı bakan bir
-    analiz ilişkiyi olduğundan zayıf gösteriyor.
-
-    Gecikme k, a'nın k dönem öncesinin b ile korelasyonu demek.
+    En yüksek mutlak korelasyonu seçer. Bu örneklem içi seçim için
+    çoklu karşılaştırma düzeltmesi veya dış örneklem doğrulaması yapılmaz.
     """
     if maks_gecikme < 0:
         raise AnalizHatasi("Gecikme negatif olamaz.")
@@ -210,11 +201,13 @@ def iliski(
         # Zorlanan dönüşüm durağanlaştırmıyorsa sustuğumuz için değil,
         # söylediğimiz için sorumluluk kullanıcıda olsun.
         for ad, d in ((ad_a, da), (ad_b, db)):
-            p = d.p_degerleri.get(donusum)
+            test_adi = "seviye" if donusum == "level" else donusum
+            p = d.p_degerleri.get(test_adi)
             if p is not None and p >= ALFA:
                 uyarilar.append(
-                    f"{ad}: istenen dönüşüm ({donusum}) bu seriyi "
-                    f"durağanlaştırmıyor (ADF p={p:.4f}). Sonuç şişkin olabilir."
+                    f"{ad}: istenen dönüşüm ({donusum}) için ADF birim kök "
+                    f"hipotezi reddedilmedi (p={p:.4f}); durağanlaştırmıyor "
+                    "olabilir. Sonuç dikkatle yorumlanmalı."
                 )
     else:
         donusum = (
@@ -241,8 +234,13 @@ def iliski(
         "ham_seviye_korelasyonu": {
             "deger": round(korelasyon(a, b), 4),
             "uyari": (
-                "Bu rakamı kullanma. Seriler durağan olmadığı için sahte "
-                "regresyon; ortak trend yüzünden şişkin çıkıyor."
+                "Bu rakamı tek başına ilişki kanıtı olarak kullanma. "
+                "En az bir seride ADF birim kök hipotezi reddedilmedi; "
+                "seviye korelasyonu yanıltıcı olabilir."
+                if ortak > 0
+                else "İki seride de ADF birim kök hipotezi reddedildi. "
+                     "Seviye korelasyonu nedensellik veya model uygunluğu "
+                     "kanıtı değildir."
             ),
         },
         "yorum": (
@@ -259,7 +257,7 @@ def iliski(
             uyarilar.append(
                 f"En güçlü ilişki {g['tepe_gecikme']}. gecikmede "
                 f"({g['tepe_korelasyon']}), eşanlı değil ({sonuc['korelasyon']}). "
-                "Eşanlı rakama bakmak ilişkiyi olduğundan zayıf gösterir."
+                "Bu tepe aynı örneklemde seçildi; ayrıca doğrulanmalı."
             )
 
     # İki seri de I(1) ise seviyelerde uzun dönem ilişki olabilir.
@@ -269,11 +267,11 @@ def iliski(
             "p": round(p, 4),
             "sonuc": "var" if p < ALFA else "yok",
             "not": (
-                "Eşbütünleşme varsa seviyelerde uzun dönem ilişki vardır ve "
-                "hata düzeltme modeli kurulmalı; sadece farklarla çalışmak "
-                "uzun dönem bilgisini atar."
+                "Bu örneklemde eşbütünleşme yok sıfır hipotezi reddedildi. "
+                "Uzun dönem ilişki ve hata düzeltme modeli ayrıca incelenebilir."
                 if p < ALFA
-                else "Eşbütünleşme bulunamadı; farklarla çalışmak doğru."
+                else "Eşbütünleşme yok sıfır hipotezi reddedilmedi; "
+                     "bu sonuç tek başına fark modelini doğrulamaz."
             ),
         }
 

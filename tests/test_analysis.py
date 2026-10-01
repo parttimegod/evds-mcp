@@ -111,6 +111,15 @@ def test_iliski_ham_korelasyonu_uyariyla_veriyor():
     assert "kullanma" in s["ham_seviye_korelasyonu"]["uyari"].lower()
 
 
+def test_duragan_serilere_birim_kok_uyarisi_verilmiyor():
+    s = iliski(beyaz_gurultu(tohum=0), beyaz_gurultu(tohum=1), "A", "B")
+
+    assert s["duraganlik"]["A"]["derece"] == 0
+    assert s["duraganlik"]["B"]["derece"] == 0
+    assert "reddedildi" in s["ham_seviye_korelasyonu"]["uyari"]
+    assert "yanıltıcı" not in s["ham_seviye_korelasyonu"]["uyari"]
+
+
 def test_iliski_donusumu_bildiriyor():
     s = iliski(rassal_yuruyus(tohum=1), rassal_yuruyus(tohum=2), "A", "B")
 
@@ -230,3 +239,14 @@ def test_zorlanan_donusum_duraganlastirmiyorsa_uyariyor():
 def test_level_seviye_ile_ayni():
     x = beyaz_gurultu(30)
     assert donustur(x, "level") == donustur(x, "seviye")
+
+
+def test_level_ve_seviye_ayni_adf_uyarisini_veriyor():
+    a = rassal_yuruyus(tohum=1)
+    b = rassal_yuruyus(tohum=2)
+
+    for donusum in ("level", "seviye"):
+        sonuc = iliski(a, b, "A", "B", donusum_zorla=donusum)
+        uyarilar = [u for u in sonuc["uyarilar"] if "istenen dönüşüm" in u]
+        assert len(uyarilar) == 2
+        assert all("hipotezi reddedilmedi" in u for u in uyarilar)
