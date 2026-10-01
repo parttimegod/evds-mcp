@@ -39,9 +39,7 @@ CREATE TABLE IF NOT EXISTS cekim (
     CHECK (istenen_baslangic <= istenen_bitis)
 );
 
--- Baskın sorgu "bu serinin çekim geçmişi" (bkz. Depo.cekimler_oku),
--- en yeniden en eskiye. Aralık sınırları da coverage/denetim
--- sorgularında filtre olarak kullanılabilsin diye indekste.
+-- Bir serinin istenen tarih aralığına göre çekimlerini daraltmak için.
 CREATE INDEX IF NOT EXISTS cekim_kod_aralik_idx
     ON cekim (kod, istenen_baslangic, istenen_bitis);
 
@@ -51,8 +49,8 @@ CREATE TABLE IF NOT EXISTS gozlem (
     -- EVDS'nin ham Tarih alanı, örn. "2020-3" ya da "01-01-2020" --
     -- biçim frekansa göre değişiyor ve client.py'nin belirttiği gibi
     -- şu an yalnızca aylık için canlı doğrulandı (bkz. SONRA.md).
-    -- tarih sütunu her zaman dönemin ilk günü olarak normalize
-    -- ediliyor (bkz. depo._gozlem_tarihi); bu normalizasyon yanlış
+    -- Aylık etiket ayın ilk gününe çevriliyor; günlük tarih korunuyor
+    -- (bkz. depo._gozlem_tarihi). Bu normalizasyon yanlış
     -- çıkarsa ham_donem, orijinal metni geri getirip elle teşhis
     -- etmeyi mümkün kılıyor -- parse hatası sessizce kaybolmuyor.
     ham_donem TEXT NOT NULL,
@@ -61,11 +59,9 @@ CREATE TABLE IF NOT EXISTS gozlem (
     -- client.py). Burada 0 saklarsak her ortalama ve her fark sessizce
     -- bozulur -- sıfır gerçek bir değer gibi hesaba girer.
     --
-    -- NUMERIC, DOUBLE PRECISION değil: bu değerler fiyat endeksi ve
-    -- döviz kuru -- ikili kayan nokta, toplamda ve tam eşitlik
-    -- karşılaştırmasında sessizce yuvarlıyor. EVDS zaten ondalık bir
-    -- string döndürüyor (bkz. client._sayiya_cevir); NUMERIC bu
-    -- string'in ifade ettiği değeri bozmadan saklıyor.
+    -- Depoda ondalık aritmetik için NUMERIC. İstemci değerleri önce
+    -- float'a çeviriyor; kaynak metnin tüm hassasiyetini korumaz.
+    -- Depo'ya doğrudan Decimal verilirse bu ara dönüşüm yapılmaz.
     deger     NUMERIC,
     -- Bu değeri en son hangi çekim yazdı. ON DELETE SET NULL: bir
     -- cekim kaydı silinirse (ör. eski denetim kayıtlarının temizliği)
@@ -77,8 +73,5 @@ CREATE TABLE IF NOT EXISTS gozlem (
     PRIMARY KEY (kod, tarih)
 );
 
--- Baskın sorgu "bu serinin son N gözlemi" (bkz. Depo.son_gozlemler).
--- Azalan sırada indeks bu sorguyu sort'suz bir indeks taramasına
--- çeviriyor; (kod, tarih) artan sırada olsaydı LIMIT'ten önce ayrıca
--- ters çevirmek gerekirdi.
-CREATE INDEX IF NOT EXISTS gozlem_kod_tarih_desc_idx ON gozlem (kod, tarih DESC);
+-- WHERE kod = ... ORDER BY tarih DESC LIMIT ... sorgusu birincil
+-- anahtarın ters taramasını kullanır; ayrıca DESC indeksi gerekmez.
