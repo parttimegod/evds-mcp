@@ -352,8 +352,7 @@ class Depo:
     def son_gozlemler(self, kod: str, adet: int) -> list[DepoGozlem]:
         """Son `adet` gözlemi en yeniden en eskiye döner.
 
-        gozlem_kod_tarih_desc_idx bu ORDER BY + LIMIT'i sort'suz bir
-        indeks taramasına çeviriyor.
+        (kod, tarih) birincil anahtarı bu sorguda ters taranabilir.
         """
         with self._baglan() as baglanti, baglanti.cursor() as imlec:
             imlec.execute(
